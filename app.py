@@ -119,7 +119,5 @@ def delete_session():
         return jsonify({'message': 'No files found for this session'}), 404
 
 
-
-
 if __name__ == '__main__':
     app.run(debug=True)
