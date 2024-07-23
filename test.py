@@ -8,7 +8,7 @@ base_url = 'http://127.0.0.1:5000'
 
 # 1. Upload the file
 upload_url = f'{base_url}/upload'
-file_path = '/workspaces/sourcebox-flask-api-openai-rag-demo/test/example.csv'
+file_path = '/workspaces/python-8/test/example.csv'
 
 with open(file_path, 'rb') as f:
     files = {'file': f}
