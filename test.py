@@ -1,17 +1,33 @@
-from openai import OpenAI
-import os
-from dotenv import load_dotenv
+import requests
 
-load_dotenv()
+# Initialize the session
+session = requests.Session()
 
-client = OpenAI(
-        # This is the default and can be omitted
-        api_key = os.getenv('OPENAI_API_KEY')
-    )
+# Define the base URL
+base_url = 'http://127.0.0.1:5000'
 
-response = client.embeddings.create(
-    input="Your text string goes here",
-    model="text-embedding-3-small"
-)
+# 1. Upload the file
+upload_url = f'{base_url}/upload'
+file_path = '/workspaces/sourcebox-flask-api-openai-rag-demo/test/example.csv'
 
-print(response.data[0].embedding)
+with open(file_path, 'rb') as f:
+    files = {'file': f}
+    response = session.post(upload_url, files=files)
+    print("Upload response:", response.json())
+
+# 2. Retrieve the list of uploaded files
+retrieve_files_url = f'{base_url}/retrieve-files'
+response = session.get(retrieve_files_url)
+print("Retrieve files response:", response.json())
+
+# 3. Get GPT-3 response
+gpt_response_url = f'{base_url}/gpt-response'
+data = {'user_message': 'Explain the content of the uploaded file'}
+response = session.post(gpt_response_url, json=data)
+print("GPT response:", response.json())
+
+
+# 4. Delete the session and all associated files
+delete_session_url = f'{base_url}/delete-session'
+response = session.delete(delete_session_url)
+print("Delete session response:", response.json())

@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify, session
-import os
+import os, shutil
 import openai
 from dotenv import load_dotenv
 from uuid import uuid4
@@ -102,6 +102,24 @@ def gpt_response():
     assistant_message = chat_completion.choices[0].message.content
     print(f"Assistant message: {assistant_message}")  # Debug statement
     return jsonify({"message": assistant_message})
+
+
+# Delete session and all associated files
+@app.route('/delete-session', methods=['DELETE'])
+def delete_session():
+    if 'session_id' not in session:
+        return jsonify({'message': 'No session started'}), 400
+    
+    session_folder = os.path.join(app.config['UPLOAD_FOLDER'], session['session_id'])
+    if os.path.exists(session_folder):
+        shutil.rmtree(session_folder)
+        session.pop('session_id', None)
+        return jsonify({'message': 'Session and all associated files deleted successfully'}), 200
+    else:
+        return jsonify({'message': 'No files found for this session'}), 404
+
+
+
 
 if __name__ == '__main__':
     app.run(debug=True)
