@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify, session
 import os, shutil
 import openai
+import openpyxl
 from dotenv import load_dotenv
 from uuid import uuid4
 import process_files as pf

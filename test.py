@@ -4,7 +4,8 @@ import requests
 session = requests.Session()
 
 # Define the base URL
-base_url = 'http://127.0.0.1:5000'
+#base_url = 'http://127.0.0.1:5000'
+base_url = 'https://sourcebox-rag-api-9f82a9c7f128.herokuapp.com'
 
 # 1. Upload the file
 upload_url = f'{base_url}/upload'
