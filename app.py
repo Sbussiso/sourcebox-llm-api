@@ -58,7 +58,8 @@ def retrieve_files():
     file_list = [{'filename': file} for file in files if file != 'embeddings.npy']
     return jsonify({'files': file_list})
 
-# GPT RAG response
+
+# GPT RAG response 
 @app.route('/gpt-response', methods=['POST'])
 def gpt_response():
     data = request.json
