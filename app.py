@@ -6,15 +6,30 @@ import openpyxl
 from dotenv import load_dotenv
 from uuid import uuid4
 import process_files as pf
+from query import perform_query
+from vector import project_to_vector
 
 load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'default_secret_key')  # Replace with a real secret key
 app.config['UPLOAD_FOLDER'] = 'uploads'
 
+client = openai.OpenAI(
+        api_key=os.getenv('OPENAI_API_KEY')
+    )
+
+
+@app.route('/start-session', methods=['POST'])
+def start_session():
+    if 'session_id' not in session:
+        session['session_id'] = str(uuid4())
+    return jsonify({"message": "Session started", "session_id": session['session_id']})
+
+
 # Ensure the upload directory exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
+# Upload file for RAG
 # Upload file for RAG
 @app.route('/upload', methods=['POST'])
 def upload_file():
@@ -37,9 +52,11 @@ def upload_file():
         file.save(filepath)
         
         # Process files and save embeddings
-        pf.process_and_save_embeddings(session_folder)
+        project_to_vector(session_folder)  # This function will handle the file processing and save the embeddings
         
-        return jsonify({'message': 'File uploaded successfully', 'filename': filename}), 201
+        return jsonify({'message': 'File uploaded and processed successfully', 'filename': filename}), 201
+
+
 
 # Retrieve uploaded files for RAG in user session
 @app.route('/retrieve-files', methods=['GET'])
@@ -57,6 +74,7 @@ def retrieve_files():
     
     file_list = [{'filename': file} for file in files if file != 'embeddings.npy']
     return jsonify({'files': file_list})
+
 
 
 # GPT RAG response 
@@ -123,6 +141,71 @@ def sentiment_pipe():
 
     result = sentiment_analysis(user_message)
     return jsonify({"message": result})
+
+
+
+
+def chatgpt_response(prompt, history=None, vector_results=None):
+    
+    response = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[
+        {"role": "system", "content": f"""
+                                        You are a helpful Code comprehention assistant. Assist the user with Code related prompts.
+                                        You must write full detailed answers showing your references
+                                        CONVERSATION HISTORY: {history} (ignore if no history)
+                                        USER PROMPT: {prompt}
+                                        VECTOR SEARCH RESULTS: {vector_results}
+
+                                        Response steps:
+                                        1. analyze VECTOR SEARCH RESULTS
+                                        2. analyze CONVERSATION HISTORY
+                                        3. analyze USER PROMPT
+                                        4. cross reference VECTOR SEARCH RESULTS, CONVERSATION HISTORY, and USER PROMPT To answer the USER PROMPT
+                                        """},
+
+        {"role": "user", "content": str(prompt)},
+    ]
+    )
+    message = response.choices[0].message.content
+    return message
+
+
+
+
+
+# DeepQuery code response
+@app.route('/deepquery-code', methods=['POST'])
+def deepquery_code():
+    try:
+        # Parse request data
+        data = request.json
+        user_message = data.get('user_message')
+        pack_id = data.get('pack_id')
+        history = data.get('history')
+        
+        # Check if a session exists
+        if 'session_id' not in session:
+            return jsonify({'message': 'No session started'}), 400
+
+        
+        # If pack_id is provided, perform a vector query
+        if pack_id:
+            vector_results = perform_query(user_message)  # Query the vector store using DeepLake
+
+        # Generate a response using GPT, integrating the history and vector results
+        assistant_message = chatgpt_response(user_message, history, vector_results)
+
+        # Print the assistant's message for debugging
+        print(f"Assistant message: {assistant_message}")
+
+        # Return the assistant's message as the response
+        return jsonify({"message": assistant_message})
+
+    except Exception as e:
+        print(f"Error occurred: {e}")
+        return jsonify({'error': str(e)}), 500
+
 
 
 
