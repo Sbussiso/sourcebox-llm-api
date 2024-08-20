@@ -93,7 +93,7 @@ for content in contents:
 # 6. Perform the deep query with the first code pack ID
 deep_query_url = f'{base_url}/deepquery-code'
 deepquery_payload = {
-    'user_message': 'What is the status of my project?',
+    'user_message': 'what context do you currently have?',
     'pack_id': first_code_pack_id  # Use the first code pack ID
 }
 

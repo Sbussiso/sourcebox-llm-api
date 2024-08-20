@@ -29,7 +29,7 @@ def start_session():
 # Ensure the upload directory exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-# Upload file for RAG
+
 # Upload file for RAG
 @app.route('/upload', methods=['POST'])
 def upload_file():
@@ -146,6 +146,7 @@ def sentiment_pipe():
 
 
 def chatgpt_response(prompt, history=None, vector_results=None):
+    print(f"Prompt: {prompt}, History: {history}, Vector results: {vector_results}")  # Debug statement
     
     response = client.chat.completions.create(
     model="gpt-4o-mini",
@@ -164,7 +165,7 @@ def chatgpt_response(prompt, history=None, vector_results=None):
                                         4. cross reference VECTOR SEARCH RESULTS, CONVERSATION HISTORY, and USER PROMPT To answer the USER PROMPT
                                         """},
 
-        {"role": "user", "content": str(prompt)},
+        {"role": "user", "content": f" USER PROMPT: {prompt}\n VECTOR SEARCH RESULTS: {vector_results}\n CONVERSATION HISTORY: {history}"},
     ]
     )
     message = response.choices[0].message.content
@@ -194,7 +195,7 @@ def deepquery_code():
             vector_results = perform_query(user_message)  # Query the vector store using DeepLake
 
         # Generate a response using GPT, integrating the history and vector results
-        assistant_message = chatgpt_response(user_message, history, vector_results)
+        assistant_message = chatgpt_response(user_message, history=history, vector_results=vector_results)
 
         # Print the assistant's message for debugging
         print(f"Assistant message: {assistant_message}")

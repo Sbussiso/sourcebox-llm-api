@@ -17,7 +17,7 @@ embedding_function = CustomEmbeddingFunction(client)
 
 def project_to_vector(session_folder):
     main_directory = os.getcwd()
-    user_files = os.path.join(main_directory, session_folder)
+    repo_fetch_dir = os.path.join(main_directory, f"uploads/{session_folder}")
     failed_files = []
 
     db = DeepLake(dataset_path="./my_deeplake/", embedding=embedding_function, overwrite=True)
@@ -29,7 +29,7 @@ def project_to_vector(session_folder):
     ".java", ".rb", ".go", ".sh", ".php", ".cs", ".cpp", ".c", ".ts", ".swift", ".kt", ".rs", ".r", ".scala", ".pl", ".sql"
     }
 
-    for root, dirs, files in os.walk(user_files):
+    for root, dirs, files in os.walk(repo_fetch_dir):
         for filename in files:
             file_path = os.path.join(root, filename)
             file_extension = os.path.splitext(filename)[1]
@@ -61,4 +61,4 @@ def project_to_vector(session_folder):
     return db
 
 if __name__ == "__main__":
-    project_to_vector()
+    project_to_vector('2129868c-1eab-4a55-826c-70447c177bc2')
