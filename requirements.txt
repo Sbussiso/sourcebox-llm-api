@@ -76,7 +76,7 @@ orjson==3.10.7
 packaging==24.1
 pandas==2.2.2
 pathos==0.3.2
-pillow==10.2.0
+pillow==10.3.0
 pox==0.3.4
 ppft==1.7.6.8
 pydantic==2.8.2
