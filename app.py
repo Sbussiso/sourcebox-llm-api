@@ -91,6 +91,7 @@ def chatgpt_response(prompt, history=None, vector_results=None):
     )
     return response.choices[0].message.content
 
+
 # Resources
 class DeepQueryCode(Resource):
     def post(self):
@@ -103,30 +104,33 @@ class DeepQueryCode(Resource):
 
             logging.info("Received POST request with user_message: %s, pack_id: %s", user_message, pack_id)
 
-            # Ensure session ID is created
-            session_id = initialize_session()
-
-            # Authenticate and handle packs
-            access_token = session.get('access_token')
-            if not access_token:
-                logging.error("User not authenticated")
+            # Extract access token from the request headers
+            auth_header = request.headers.get('Authorization')
+            if not auth_header or not auth_header.startswith('Bearer '):
+                logging.error("Authorization token missing or invalid")
                 return {"error": "User not authenticated"}, 401
 
+            # Extract the token by stripping the 'Bearer ' part
+            access_token = auth_header.split(' ')[1]
+
+            # Optionally, you can validate the access token here with an external service if needed
+
+            # Process the pack if a pack_id is provided
             if pack_id:
                 logging.info("Processing pack with pack_id: %s", pack_id)
                 upload_and_process_pack(pack_id)
 
-            # Check if the my_deeplake folder exists
+            # Check if the `my_deeplake` folder exists
             cwd = os.getcwd()
             folder_path = os.path.join(cwd, "my_deeplake")
 
             if os.path.exists(folder_path) and os.path.isdir(folder_path):
                 logging.info("The my_deeplake folder exists.")
             else:
-                logging.info("The my_deeplake folder does not exist. Running project_to_vector with session_id: %s", session_id)
-                project_to_vector(session_id)
+                logging.info("The my_deeplake folder does not exist. Running project_to_vector with session_id.")
+                project_to_vector(access_token)
 
-            # Perform vector query if pack_id is provided
+            # Perform vector query if a pack_id is provided
             if pack_id:
                 logging.info("Performing vector query with user_message: %s", user_message)
                 # Initialize the embedding function
@@ -151,6 +155,9 @@ class DeepQueryCode(Resource):
         except Exception as e:
             logging.error("Exception occurred: %s", str(e))
             return {"error": str(e)}, 500
+
+
+
 
 class Login(Resource):
     def post(self):
