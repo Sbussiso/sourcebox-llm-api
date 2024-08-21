@@ -37,7 +37,6 @@ def initialize_session():
     return session['session_id']
 
 def upload_and_process_pack(pack_id):
-    # Initialize the session ID
     session_id = initialize_session()
     logging.info("Uploading and processing pack with session_id: %s", session_id)
 
@@ -48,25 +47,22 @@ def upload_and_process_pack(pack_id):
     # Retrieve the access token from the session
     access_token = session.get('access_token')
     
-    # Check if access token is present
     if not access_token:
         logging.error("Access token missing. User is not authenticated.")
         raise ValueError("User not authenticated")
 
-    # Log the access token for debugging (make sure this is only in a safe environment)
-    logging.debug(f"Using access token: {access_token}")
-
     # Prepare the request headers
     headers = {'Authorization': f'Bearer {access_token}'}
 
-    # Make the request to fetch the code pack details
+    logging.debug(f"Using access token: {access_token}")
+
+    # Send the request to fetch the code pack details
     try:
         pack_response = requests.get(get_code_pack_url, headers=headers)
     except requests.RequestException as e:
         logging.error(f"Error fetching code pack details: {str(e)}")
         raise ValueError(f"Failed to retrieve code pack details due to network issue: {str(e)}")
 
-    # Check if the request was successful
     if pack_response.status_code != 200:
         logging.error(f"Failed to retrieve code pack details: {pack_response.text}")
         raise ValueError(f"Failed to retrieve code pack details: {pack_response.text}")
@@ -99,8 +95,6 @@ def upload_and_process_pack(pack_id):
             except IOError as e:
                 logging.error(f"Error saving file {filename}: {str(e)}")
                 raise IOError(f"Failed to save file {filename} to session folder: {str(e)}")
-        else:
-            logging.warning(f"File or content missing in pack data for session_id: {session_id}")
 
     # Process files and save embeddings
     try:
@@ -110,9 +104,7 @@ def upload_and_process_pack(pack_id):
         logging.error(f"Error processing files for session_id: {session_id}. Error: {str(e)}")
         raise Exception(f"Error processing files for session_id: {session_id}. Error: {str(e)}")
 
-    # Return success message
     return {"message": "Pack uploaded and processed successfully", "session_id": session_id}
-
 
 
 
