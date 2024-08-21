@@ -29,24 +29,15 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 
 
-# Utility functions
-def initialize_session():
-    if 'session_id' not in session:
-        session['session_id'] = str(uuid4())
-        logging.info("New session initialized with session_id: %s", session['session_id'])
-    return session['session_id']
 
-def upload_and_process_pack(pack_id):
-    session_id = initialize_session()
-    logging.info("Uploading and processing pack with session_id: %s", session_id)
+
+def upload_and_process_pack(pack_id, access_token):
+    logging.info("Uploading and processing pack with pack_id: %s", pack_id)
 
     # Fetch the pack details from the external API
     auth_base_url = 'https://sourcebox-central-auth-8396932a641c.herokuapp.com'
     get_code_pack_url = f'{auth_base_url}/packman/code/details/{pack_id}'
 
-    # Retrieve the access token from the session
-    access_token = session.get('access_token')
-    
     if not access_token:
         logging.error("Access token missing. User is not authenticated.")
         raise ValueError("User not authenticated")
@@ -76,10 +67,10 @@ def upload_and_process_pack(pack_id):
         logging.error(f"Error parsing pack data: {str(e)}")
         raise ValueError(f"Error parsing pack data: {str(e)}")
 
-    # Create the session folder in the uploads directory
-    upload_folder = os.path.join(app.config['UPLOAD_FOLDER'], session_id)
+    # Create the folder for this pack (using pack_id instead of session_id)
+    upload_folder = os.path.join(app.config['UPLOAD_FOLDER'], str(pack_id))
     os.makedirs(upload_folder, exist_ok=True)
-    logging.info("Created upload folder for session_id: %s at path: %s", session_id, upload_folder)
+    logging.info("Created upload folder for pack_id: %s at path: %s", pack_id, upload_folder)
 
     # Save each file from the pack to the upload folder
     for content in contents:
@@ -91,20 +82,21 @@ def upload_and_process_pack(pack_id):
             try:
                 with open(file_path, 'w') as f:
                     f.write(file_content)
-                logging.info("Saved file: %s to session folder", filename)
+                logging.info("Saved file: %s to pack folder", filename)
             except IOError as e:
                 logging.error(f"Error saving file {filename}: {str(e)}")
-                raise IOError(f"Failed to save file {filename} to session folder: {str(e)}")
+                raise IOError(f"Failed to save file {filename} to pack folder: {str(e)}")
 
     # Process files and save embeddings
     try:
-        project_to_vector(session_id)
-        logging.info("Processed pack and saved embeddings for session_id: %s", session_id)
+        project_to_vector(upload_folder)  # Pass the folder path instead of session_id
+        logging.info("Processed pack and saved embeddings for pack_id: %s", pack_id)
     except Exception as e:
-        logging.error(f"Error processing files for session_id: {session_id}. Error: {str(e)}")
-        raise Exception(f"Error processing files for session_id: {session_id}. Error: {str(e)}")
+        logging.error(f"Error processing files for pack_id: {pack_id}. Error: {str(e)}")
+        raise Exception(f"Error processing files for pack_id: {pack_id}. Error: {str(e)}")
 
-    return {"message": "Pack uploaded and processed successfully", "session_id": session_id}
+    return {"message": "Pack uploaded and processed successfully", "pack_id": pack_id}
+
 
 
 
