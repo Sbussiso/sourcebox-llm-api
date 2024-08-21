@@ -37,6 +37,7 @@ def initialize_session():
     return session['session_id']
 
 def upload_and_process_pack(pack_id):
+    # Initialize the session ID
     session_id = initialize_session()
     logging.info("Uploading and processing pack with session_id: %s", session_id)
 
@@ -44,20 +45,40 @@ def upload_and_process_pack(pack_id):
     auth_base_url = 'https://sourcebox-central-auth-8396932a641c.herokuapp.com'
     get_code_pack_url = f'{auth_base_url}/packman/code/details/{pack_id}'
 
+    # Retrieve the access token from the session
     access_token = session.get('access_token')
+    
+    # Check if access token is present
     if not access_token:
+        logging.error("Access token missing. User is not authenticated.")
         raise ValueError("User not authenticated")
 
+    # Log the access token for debugging (make sure this is only in a safe environment)
+    logging.debug(f"Using access token: {access_token}")
+
+    # Prepare the request headers
     headers = {'Authorization': f'Bearer {access_token}'}
-    pack_response = requests.get(get_code_pack_url, headers=headers)
+
+    # Make the request to fetch the code pack details
+    try:
+        pack_response = requests.get(get_code_pack_url, headers=headers)
+    except requests.RequestException as e:
+        logging.error(f"Error fetching code pack details: {str(e)}")
+        raise ValueError(f"Failed to retrieve code pack details due to network issue: {str(e)}")
 
     # Check if the request was successful
     if pack_response.status_code != 200:
+        logging.error(f"Failed to retrieve code pack details: {pack_response.text}")
         raise ValueError(f"Failed to retrieve code pack details: {pack_response.text}")
 
     # Extract pack contents
-    pack_data = pack_response.json()
-    contents = pack_data.get('contents', [])
+    try:
+        pack_data = pack_response.json()
+        contents = pack_data.get('contents', [])
+        logging.info(f"Successfully retrieved pack contents. Number of files: {len(contents)}")
+    except ValueError as e:
+        logging.error(f"Error parsing pack data: {str(e)}")
+        raise ValueError(f"Error parsing pack data: {str(e)}")
 
     # Create the session folder in the uploads directory
     upload_folder = os.path.join(app.config['UPLOAD_FOLDER'], session_id)
@@ -71,15 +92,30 @@ def upload_and_process_pack(pack_id):
 
         if filename and file_content:
             file_path = os.path.join(upload_folder, filename)
-            with open(file_path, 'w') as f:
-                f.write(file_content)
-            logging.info("Saved file: %s to session folder", filename)
+            try:
+                with open(file_path, 'w') as f:
+                    f.write(file_content)
+                logging.info("Saved file: %s to session folder", filename)
+            except IOError as e:
+                logging.error(f"Error saving file {filename}: {str(e)}")
+                raise IOError(f"Failed to save file {filename} to session folder: {str(e)}")
+        else:
+            logging.warning(f"File or content missing in pack data for session_id: {session_id}")
 
     # Process files and save embeddings
-    project_to_vector(session_id)
-    logging.info("Processed pack and saved embeddings for session_id: %s", session_id)
+    try:
+        project_to_vector(session_id)
+        logging.info("Processed pack and saved embeddings for session_id: %s", session_id)
+    except Exception as e:
+        logging.error(f"Error processing files for session_id: {session_id}. Error: {str(e)}")
+        raise Exception(f"Error processing files for session_id: {session_id}. Error: {str(e)}")
 
+    # Return success message
     return {"message": "Pack uploaded and processed successfully", "session_id": session_id}
+
+
+
+
 
 def chatgpt_response(prompt, history=None, vector_results=None):
     response = client.chat.completions.create(
