@@ -133,29 +133,26 @@ class DeepQueryCode(Resource):
             # Extract the token by stripping the 'Bearer ' part
             access_token = auth_header.split(' ')[1]
 
-            # Optionally, you can validate the access token here with an external service if needed
-
             # Process the pack if a pack_id is provided
             if pack_id:
                 logging.info("Processing pack with pack_id: %s", pack_id)
-                upload_and_process_pack(pack_id)
+                upload_and_process_pack(pack_id, access_token)  # Pass the token to the function
 
-            # Check if the `my_deeplake` folder exists
-            cwd = os.getcwd()
-            folder_path = os.path.join(cwd, "my_deeplake")
+            # Check if the `my_deeplake` folder exists for the pack
+            folder_path = os.path.join("my_deeplake", str(pack_id))
 
             if os.path.exists(folder_path) and os.path.isdir(folder_path):
-                logging.info("The my_deeplake folder exists.")
+                logging.info("The my_deeplake folder exists for pack_id: %s", pack_id)
             else:
-                logging.info("The my_deeplake folder does not exist. Running project_to_vector with session_id.")
-                project_to_vector(access_token)
+                logging.info("The my_deeplake folder does not exist. Running project_to_vector.")
+                project_to_vector(folder_path)  # Use folder path instead of session_id
 
             # Perform vector query if a pack_id is provided
             if pack_id:
                 logging.info("Performing vector query with user_message: %s", user_message)
                 # Initialize the embedding function
                 embedding_function = CustomEmbeddingFunction(client)
-                db = DeepLake(dataset_path="./my_deeplake/", embedding=embedding_function, read_only=True)
+                db = DeepLake(dataset_path=folder_path, embedding=embedding_function, read_only=True)
                 vector_results = perform_query(db, user_message)
                 logging.info("Vector query results: %s", vector_results)
             else:
@@ -175,6 +172,7 @@ class DeepQueryCode(Resource):
         except Exception as e:
             logging.error("Exception occurred: %s", str(e))
             return {"error": str(e)}, 500
+
 
 
 
