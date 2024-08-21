@@ -61,4 +61,4 @@ def project_to_vector(session_folder):
     return db
 
 if __name__ == "__main__":
-    project_to_vector('2129868c-1eab-4a55-826c-70447c177bc2')
+    project_to_vector('0185a48d-ddc0-408f-8485-76b032ff5426')
