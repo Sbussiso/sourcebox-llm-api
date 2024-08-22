@@ -12,6 +12,8 @@ from query import perform_query
 from langchain_community.vectorstores import DeepLake
 from custom_embedding import CustomEmbeddingFunction
 import hashlib
+import hashlib
+import re
 
 # Load environment variables
 load_dotenv()
@@ -36,60 +38,71 @@ def get_user_folder(access_token):
     os.makedirs(user_folder, exist_ok=True)
     return user_folder
 
+def sanitize_filename(url):
+    """Generate a safe and valid filename for URLs by using a hash."""
+    url_hash = hashlib.sha256(url.encode()).hexdigest()
+    return f"{url_hash}.txt"
+
 def upload_and_process_pack(pack_id, access_token, route):
     logging.info("Uploading and processing pack with pack_id: %s", pack_id)
 
     # Fetch the pack details from the external API
     auth_base_url = 'https://sourcebox-central-auth-8396932a641c.herokuapp.com'
-    get_code_pack_url = f'{auth_base_url}/packman/{route}/{pack_id}'
+    get_pack_url = f'{auth_base_url}/packman/{route}/{pack_id}'
 
     if not access_token:
         logging.error("Access token missing. User is not authenticated.")
         raise ValueError("User not authenticated")
 
-    # Prepare the request headers
     headers = {'Authorization': f'Bearer {access_token}'}
 
-    logging.debug(f"Using access token: {access_token}")
-
-    # Send the request to fetch the code pack details
     try:
-        pack_response = requests.get(get_code_pack_url, headers=headers)
+        pack_response = requests.get(get_pack_url, headers=headers)
+        pack_response.raise_for_status()
     except requests.RequestException as e:
-        logging.error(f"Error fetching code pack details: {str(e)}")
-        raise ValueError(f"Failed to retrieve code pack details due to network issue: {str(e)}")
-
-    if pack_response.status_code != 200:
-        logging.error(f"Failed to retrieve code pack details: {pack_response.text}")
-        raise ValueError(f"Failed to retrieve code pack details: {pack_response.text}")
+        logging.error(f"Error fetching pack details: {str(e)}")
+        raise ValueError(f"Failed to retrieve pack details: {str(e)}")
 
     # Extract pack contents
     try:
         pack_data = pack_response.json()
         contents = pack_data.get('contents', [])
-        logging.info(f"Successfully retrieved pack contents. Number of files: {len(contents)}")
+        logging.info(f"Successfully retrieved pack contents. Number of entries: {len(contents)}")
     except ValueError as e:
         logging.error(f"Error parsing pack data: {str(e)}")
         raise ValueError(f"Error parsing pack data: {str(e)}")
 
     # Create a folder for this user using their access token hash
     user_folder = get_user_folder(access_token)
-    logging.info("Created upload folder for user with hashed token at path: %s", user_folder)
+    logging.info(f"Created upload folder for user with hashed token at path: {user_folder}")
 
-    # Save each file from the pack to the user's folder
+    # Ensure the user folder exists
+    os.makedirs(user_folder, exist_ok=True)
+
+    # Save each file or link content from the pack to the user's folder
     for content in contents:
-        filename = content.get('filename')
+        data_type = content.get('data_type')
         file_content = content.get('content')
+        filename = content.get('filename')
 
-        if filename and file_content:
-            file_path = os.path.join(user_folder, filename)
-            try:
-                with open(file_path, 'w') as f:
-                    f.write(file_content)
-                logging.info("Saved file: %s to user folder", filename)
-            except IOError as e:
-                logging.error(f"Error saving file {filename}: {str(e)}")
-                raise IOError(f"Failed to save file {filename} to user folder: {str(e)}")
+        # If this is a link, generate a valid filename using a hash
+        if data_type == 'link':
+            filename = sanitize_filename(file_content)
+
+        # Ensure we have a valid filename for saving files
+        if not filename:
+            filename = f"data_{data_type}.txt"
+
+        # Save the content for both files and links as text files in the user's folder
+        file_path = os.path.join(user_folder, filename)
+        
+        try:
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(file_content)
+            logging.info(f"Saved {data_type} content to file: {filename}")
+        except IOError as e:
+            logging.error(f"Error saving {data_type} to {filename}: {str(e)}")
+            raise IOError(f"Failed to save {data_type} content to file: {filename}: {str(e)}")
 
     # Process files and save embeddings
     try:
@@ -97,7 +110,7 @@ def upload_and_process_pack(pack_id, access_token, route):
         logging.info("Processed pack and saved embeddings for user folder: %s", user_folder)
     except Exception as e:
         logging.error(f"Error processing files for user folder: {user_folder}. Error: {str(e)}")
-        raise Exception(f"Error processing files for user folder: {user_folder}. Error: {str(e)}")
+        raise Exception(f"Error processing files for user folder: {str(e)}")
 
     return {"message": "Pack uploaded and processed successfully", "folder": user_folder}
 

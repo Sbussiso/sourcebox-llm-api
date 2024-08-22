@@ -77,6 +77,56 @@ def test_deepquery_code_with_pack():
     else:
         print("Error:", response.text)
 
+# Test DeepQuery with user_message only
+def test_deepquery_message():
+    if not access_token:
+        print("Error: No access token available.")
+        return
+
+    url = f'{base_url}/deepquery'
+    payload = {
+        'user_message': 'What is this data',
+        'history': 'Previous conversation: what data you are seeing.',
+        'pack_id': '1'  # Assuming pack ID 1
+    }
+
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json'
+    }
+
+    response = session.post(url, json=payload, headers=headers)
+    print(f"Status Code: {response.status_code}")
+    if response.status_code == 200:
+        print("Response Data:", response.json())
+    else:
+        print("Error:", response.text)
+
+# Test DeepQuery with pack data
+def test_deepquery_with_pack():
+    if not access_token:
+        print("Error: No access token available.")
+        return
+
+    url = f'{base_url}/deepquery'
+    payload = {
+        'user_message': 'What is this data',
+        'history': 'Previous conversation: what data you are seeing.',
+        'pack_id': '1'  # Use a valid pack ID
+    }
+
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json'
+    }
+
+    response = session.post(url, json=payload, headers=headers)
+    print(f"Status Code: {response.status_code}")
+    if response.status_code == 200:
+        print("Response Data:", response.json())
+    else:
+        print("Error:", response.text)
+
 # Test DeleteSession endpoint
 def test_delete_session():
     if not access_token:
@@ -102,12 +152,19 @@ if __name__ == '__main__':
     login()
 
     if access_token:
-        print("\nTesting /deepquery-code with user_message only...")
-        test_deepquery_code_message()
+        #print("\nTesting /deepquery-code with user_message only...")
+        #test_deepquery_code_message()
 
-        print("\nTesting /deepquery-code with pack data...")
-        test_deepquery_code_with_pack()
+        #print("\nTesting /deepquery-code with pack data...")
+        #test_deepquery_code_with_pack()
 
+        print("\nTesting /deepquery with user_message only...")
+        test_deepquery_message()
+
+        print("\nTesting /deepquery with pack data...")
+        test_deepquery_with_pack()
+
+        # Uncomment this to test session deletion
         #print("\nTesting /delete-session...")
         #test_delete_session()
     else:
