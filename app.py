@@ -173,6 +173,58 @@ class DeepQueryCode(Resource):
             return {"error": str(e)}, 500
 
 
+
+class DeepQueryRaw(Resource):
+    def post(self):
+        try:
+            # Extract data from the request
+            data = request.json
+            user_message = data.get('user_message')
+            pack_id = data.get('pack_id', None)
+
+            logging.info("Received POST request for raw vector search with user_message: %s, pack_id: %s", user_message, pack_id)
+
+            # Extract access token from the request headers
+            auth_header = request.headers.get('Authorization')
+            if not auth_header or not auth_header.startswith('Bearer '):
+                logging.error("Authorization token missing or invalid")
+                return {"error": "User not authenticated"}, 401
+
+            # Extract the token by stripping the 'Bearer ' part
+            access_token = auth_header.split(' ')[1]
+
+            # Get the user-specific folder for vector querying
+            user_folder = get_user_folder(access_token)
+
+            # Set the correct dataset path for DeepLake
+            deeplake_folder_path = os.path.join("my_deeplake", user_folder)
+
+            if os.path.exists(deeplake_folder_path) and os.path.isdir(deeplake_folder_path):
+                logging.info("The my_deeplake folder exists for user folder: %s", user_folder)
+            else:
+                logging.info("The my_deeplake folder does not exist. Running project_to_vector.")
+                project_to_vector(user_folder)
+
+            # Perform vector query
+            logging.info("Performing vector query with user_message: %s", user_message)
+            embedding_function = CustomEmbeddingFunction(client)
+            db = DeepLake(dataset_path=deeplake_folder_path, embedding=embedding_function, read_only=True)
+            vector_results = perform_query(db, user_message)
+            logging.info("Vector query results: %s", vector_results)
+
+            # Return vector results without invoking the LLM
+            return {"vector_results": vector_results}, 200
+
+        except ValueError as ve:
+            logging.error("ValueError occurred: %s", str(ve))
+            return {"error": str(ve)}, 400
+        except Exception as e:
+            logging.error("Exception occurred: %s", str(e))
+            return {"error": str(e)}, 500
+
+
+
+
 # Login Resource
 class Login(Resource):
     def post(self):
@@ -222,6 +274,7 @@ class DeleteSession(Resource):
 api.add_resource(DeepQueryCode, '/deepquery-code')
 api.add_resource(Login, '/login')
 api.add_resource(DeleteSession, '/delete-session')
+api.add_resource(DeepQueryRaw, '/deepquery-raw')
 
 # Run the Flask Application
 if __name__ == '__main__':
