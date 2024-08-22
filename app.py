@@ -197,7 +197,7 @@ class DeepQueryRaw(Resource):
             user_folder = get_user_folder(access_token)
 
             # Set the correct dataset path for DeepLake
-            deeplake_folder_path = os.path.join("my_deeplake", user_folder)
+            deeplake_folder_path = os.path.join("my_deeplake", os.path.basename(user_folder))
 
             if os.path.exists(deeplake_folder_path) and os.path.isdir(deeplake_folder_path):
                 logging.info("The my_deeplake folder exists for user folder: %s", user_folder)
@@ -210,9 +210,13 @@ class DeepQueryRaw(Resource):
             embedding_function = CustomEmbeddingFunction(client)
             db = DeepLake(dataset_path=deeplake_folder_path, embedding=embedding_function, read_only=True)
             vector_results = perform_query(db, user_message)
-            logging.info("Vector query results: %s", vector_results)
+            
+            # Check if results are empty
+            if not vector_results:
+                logging.info("No vector results found.")
+                return {"vector_results": None}, 200
 
-            # Return vector results without invoking the LLM
+            logging.info("Vector query results: %s", vector_results)
             return {"vector_results": vector_results}, 200
 
         except ValueError as ve:
@@ -221,6 +225,7 @@ class DeepQueryRaw(Resource):
         except Exception as e:
             logging.error("Exception occurred: %s", str(e))
             return {"error": str(e)}, 500
+
 
 
 
