@@ -11,6 +11,7 @@ from vector import project_to_vector
 from query import perform_query
 from langchain_community.vectorstores import DeepLake
 from custom_embedding import CustomEmbeddingFunction
+import hashlib
 
 # Load environment variables
 load_dotenv()
@@ -23,13 +24,17 @@ api = Api(app)
 
 client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
-
 # Ensure the upload directory exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
+# Utility Functions
 
-
-
+def get_user_folder(access_token):
+    """Create a user-specific folder using a hashed version of the access token."""
+    hashed_token = hashlib.sha256(access_token.encode()).hexdigest()
+    user_folder = os.path.join(app.config['UPLOAD_FOLDER'], hashed_token)
+    os.makedirs(user_folder, exist_ok=True)
+    return user_folder
 
 def upload_and_process_pack(pack_id, access_token):
     logging.info("Uploading and processing pack with pack_id: %s", pack_id)
@@ -67,40 +72,36 @@ def upload_and_process_pack(pack_id, access_token):
         logging.error(f"Error parsing pack data: {str(e)}")
         raise ValueError(f"Error parsing pack data: {str(e)}")
 
-    # Create the folder for this pack (using pack_id instead of session_id)
-    upload_folder = os.path.join(app.config['UPLOAD_FOLDER'], str(pack_id))
-    os.makedirs(upload_folder, exist_ok=True)
-    logging.info("Created upload folder for pack_id: %s at path: %s", pack_id, upload_folder)
+    # Create a folder for this user using their access token hash
+    user_folder = get_user_folder(access_token)
+    logging.info("Created upload folder for user with hashed token at path: %s", user_folder)
 
-    # Save each file from the pack to the upload folder
+    # Save each file from the pack to the user's folder
     for content in contents:
         filename = content.get('filename')
         file_content = content.get('content')
 
         if filename and file_content:
-            file_path = os.path.join(upload_folder, filename)
+            file_path = os.path.join(user_folder, filename)
             try:
                 with open(file_path, 'w') as f:
                     f.write(file_content)
-                logging.info("Saved file: %s to pack folder", filename)
+                logging.info("Saved file: %s to user folder", filename)
             except IOError as e:
                 logging.error(f"Error saving file {filename}: {str(e)}")
-                raise IOError(f"Failed to save file {filename} to pack folder: {str(e)}")
+                raise IOError(f"Failed to save file {filename} to user folder: {str(e)}")
 
     # Process files and save embeddings
     try:
-        project_to_vector(upload_folder)  # Pass the folder path instead of session_id
-        logging.info("Processed pack and saved embeddings for pack_id: %s", pack_id)
+        project_to_vector(user_folder)  # Pass the folder path to the vectorization function
+        logging.info("Processed pack and saved embeddings for user folder: %s", user_folder)
     except Exception as e:
-        logging.error(f"Error processing files for pack_id: {pack_id}. Error: {str(e)}")
-        raise Exception(f"Error processing files for pack_id: {pack_id}. Error: {str(e)}")
+        logging.error(f"Error processing files for user folder: {user_folder}. Error: {str(e)}")
+        raise Exception(f"Error processing files for user folder: {user_folder}. Error: {str(e)}")
 
-    return {"message": "Pack uploaded and processed successfully", "pack_id": pack_id}
+    return {"message": "Pack uploaded and processed successfully", "folder": user_folder}
 
-
-
-
-
+# ChatGPT Response Function
 def chatgpt_response(prompt, history=None, vector_results=None):
     response = client.chat.completions.create(
         model="gpt-4o-mini",
@@ -111,8 +112,7 @@ def chatgpt_response(prompt, history=None, vector_results=None):
     )
     return response.choices[0].message.content
 
-
-# Resources
+# DeepQueryCode Resource
 class DeepQueryCode(Resource):
     def post(self):
         try:
@@ -138,25 +138,24 @@ class DeepQueryCode(Resource):
                 logging.info("Processing pack with pack_id: %s", pack_id)
                 upload_and_process_pack(pack_id, access_token)  # Pass the token to the function
 
-            # Check if the `my_deeplake` folder exists for the pack
-            folder_path = os.path.join("my_deeplake", str(pack_id))
+            # Get the user-specific folder for vector querying
+            user_folder = get_user_folder(access_token)
 
-            if os.path.exists(folder_path) and os.path.isdir(folder_path):
-                logging.info("The my_deeplake folder exists for pack_id: %s", pack_id)
+            # Set the correct dataset path for DeepLake
+            deeplake_folder_path = os.path.join("my_deeplake", os.path.basename(user_folder))
+
+            if os.path.exists(deeplake_folder_path) and os.path.isdir(deeplake_folder_path):
+                logging.info("The my_deeplake folder exists for user folder: %s", user_folder)
             else:
                 logging.info("The my_deeplake folder does not exist. Running project_to_vector.")
-                project_to_vector(folder_path)  # Use folder path instead of session_id
+                project_to_vector(user_folder)
 
-            # Perform vector query if a pack_id is provided
-            if pack_id:
-                logging.info("Performing vector query with user_message: %s", user_message)
-                # Initialize the embedding function
-                embedding_function = CustomEmbeddingFunction(client)
-                db = DeepLake(dataset_path=folder_path, embedding=embedding_function, read_only=True)
-                vector_results = perform_query(db, user_message)
-                logging.info("Vector query results: %s", vector_results)
-            else:
-                vector_results = None
+            # Perform vector query
+            logging.info("Performing vector query with user_message: %s", user_message)
+            embedding_function = CustomEmbeddingFunction(client)
+            db = DeepLake(dataset_path=deeplake_folder_path, embedding=embedding_function, read_only=True)
+            vector_results = perform_query(db, user_message)
+            logging.info("Vector query results: %s", vector_results)
 
             # Generate a response using GPT, integrating history and vector results
             logging.info("Generating response using GPT with history: %s and vector_results: %s", history, vector_results)
@@ -174,9 +173,7 @@ class DeepQueryCode(Resource):
             return {"error": str(e)}, 500
 
 
-
-
-
+# Login Resource
 class Login(Resource):
     def post(self):
         try:
@@ -205,26 +202,28 @@ class Login(Resource):
             logging.error("Exception occurred during login: %s", str(e))
             return {"error": str(e)}, 500
 
+# Delete Session Resource
 class DeleteSession(Resource):
     def delete(self):
-        if 'session_id' not in session:
+        if 'access_token' not in session:
             return {"message": "No session started"}, 400
 
-        session_folder = os.path.join(app.config['UPLOAD_FOLDER'], session['session_id'])
-        if os.path.exists(session_folder):
-            shutil.rmtree(session_folder)
-            session.pop('session_id', None)
+        user_folder = get_user_folder(session['access_token'])
+        if os.path.exists(user_folder):
+            shutil.rmtree(user_folder)
+            session.pop('access_token', None)
             logging.info("Session and all associated files deleted successfully")
             return {"message": "Session and all associated files deleted successfully"}, 200
         else:
-            logging.info("No files found for session_id: %s", session['session_id'])
+            logging.info("No files found for this user")
             return {"message": "No files found for this session"}, 404
 
-# Flask-RESTful Resource routing
+# Flask-RESTful Resource Routing
 api.add_resource(DeepQueryCode, '/deepquery-code')
 api.add_resource(Login, '/login')
 api.add_resource(DeleteSession, '/delete-session')
 
+# Run the Flask Application
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8000))
     app.run(host='0.0.0.0', port=port)
