@@ -421,7 +421,7 @@ api.add_resource(DeepQuery, '/deepquery')
 api.add_resource(Login, '/login')
 api.add_resource(DeleteSession, '/delete-session')
 api.add_resource(DeepQueryCodeRaw, '/deepquery-code-raw')
-api.add_resource(DeepQueryCodeRaw, '/deepquery-raw')
+api.add_resource(DeepQueryRaw, '/deepquery-raw')
 
 # Run the Flask Application
 if __name__ == '__main__':
