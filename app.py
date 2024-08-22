@@ -36,12 +36,12 @@ def get_user_folder(access_token):
     os.makedirs(user_folder, exist_ok=True)
     return user_folder
 
-def upload_and_process_pack(pack_id, access_token):
+def upload_and_process_pack(pack_id, access_token, route):
     logging.info("Uploading and processing pack with pack_id: %s", pack_id)
 
     # Fetch the pack details from the external API
     auth_base_url = 'https://sourcebox-central-auth-8396932a641c.herokuapp.com'
-    get_code_pack_url = f'{auth_base_url}/packman/code/details/{pack_id}'
+    get_code_pack_url = f'{auth_base_url}/packman/{route}/{pack_id}'
 
     if not access_token:
         logging.error("Access token missing. User is not authenticated.")
@@ -136,7 +136,70 @@ class DeepQueryCode(Resource):
             # Process the pack if a pack_id is provided
             if pack_id:
                 logging.info("Processing pack with pack_id: %s", pack_id)
-                upload_and_process_pack(pack_id, access_token)  # Pass the token to the function
+                route = 'code/details'
+                upload_and_process_pack(pack_id, access_token, route)  # Pass the token to the function
+
+            # Get the user-specific folder for vector querying
+            user_folder = get_user_folder(access_token)
+
+            # Set the correct dataset path for DeepLake
+            deeplake_folder_path = os.path.join("my_deeplake", os.path.basename(user_folder))
+
+            if os.path.exists(deeplake_folder_path) and os.path.isdir(deeplake_folder_path):
+                logging.info("The my_deeplake folder exists for user folder: %s", user_folder)
+            else:
+                logging.info("The my_deeplake folder does not exist. Running project_to_vector.")
+                project_to_vector(user_folder)
+
+            # Perform vector query
+            logging.info("Performing vector query with user_message: %s", user_message)
+            embedding_function = CustomEmbeddingFunction(client)
+            db = DeepLake(dataset_path=deeplake_folder_path, embedding=embedding_function, read_only=True)
+            vector_results = perform_query(db, user_message)
+            logging.info("Vector query results: %s", vector_results)
+
+            # Generate a response using GPT, integrating history and vector results
+            logging.info("Generating response using GPT with history: %s and vector_results: %s", history, vector_results)
+            assistant_message = chatgpt_response(user_message, history=history, vector_results=vector_results)
+
+            logging.info("Response generated successfully: %s", assistant_message)
+
+            return {"message": assistant_message}, 200
+
+        except ValueError as ve:
+            logging.error("ValueError occurred: %s", str(ve))
+            return {"error": str(ve)}, 400
+        except Exception as e:
+            logging.error("Exception occurred: %s", str(e))
+            return {"error": str(e)}, 500
+
+
+#regular deepquery Resource
+class DeepQuery(Resource):
+    def post(self):
+        try:
+            # Extract data from the request
+            data = request.json
+            user_message = data.get('user_message')
+            pack_id = data.get('pack_id', None)
+            history = data.get('history', '')
+
+            logging.info("Received POST request with user_message: %s, pack_id: %s", user_message, pack_id)
+
+            # Extract access token from the request headers
+            auth_header = request.headers.get('Authorization')
+            if not auth_header or not auth_header.startswith('Bearer '):
+                logging.error("Authorization token missing or invalid")
+                return {"error": "User not authenticated"}, 401
+
+            # Extract the token by stripping the 'Bearer ' part
+            access_token = auth_header.split(' ')[1]
+
+            # Process the pack if a pack_id is provided
+            if pack_id:
+                logging.info("Processing pack with pack_id: %s", pack_id)
+                route = 'pack/details'
+                upload_and_process_pack(pack_id, access_token, route)  # Pass the token to the function
 
             # Get the user-specific folder for vector querying
             user_folder = get_user_folder(access_token)
@@ -228,8 +291,6 @@ class DeepQueryRaw(Resource):
 
 
 
-
-
 # Login Resource
 class Login(Resource):
     def post(self):
@@ -277,6 +338,7 @@ class DeleteSession(Resource):
 
 # Flask-RESTful Resource Routing
 api.add_resource(DeepQueryCode, '/deepquery-code')
+api.add_resource(DeepQuery, '/deepquery')
 api.add_resource(Login, '/login')
 api.add_resource(DeleteSession, '/delete-session')
 api.add_resource(DeepQueryRaw, '/deepquery-raw')
