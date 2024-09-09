@@ -21,7 +21,7 @@ def project_to_vector(user_folder_path, access_token):
     """Process files in the user folder and create a user-specific DeepLake dataset."""
     
     # Create a unique user dataset path using a hashed token
-    hashed_token = hashlib.sha256(access_token.encode()).hexdigest()
+    hashed_token = hashlib.sha256(access_token.encode()).hexdigest()  # Ensures uniqueness for each user
     dataset_path = os.path.join("my_deeplake", hashed_token)
     
     # Ensure the dataset folder exists
@@ -78,6 +78,7 @@ def project_to_vector(user_folder_path, access_token):
         logging.info("All files processed successfully.")
 
     return db
+
 
 
 
