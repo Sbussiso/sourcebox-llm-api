@@ -6,6 +6,7 @@ from langchain_text_splitters import CharacterTextSplitter
 from langchain_community.vectorstores import DeepLake
 from custom_embedding import CustomEmbeddingFunction
 import logging
+import hashlib
 
 # Load environment variables
 load_dotenv()
