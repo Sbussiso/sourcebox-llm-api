@@ -14,6 +14,19 @@ from custom_embedding import CustomEmbeddingFunction
 import hashlib
 import hashlib
 import re
+import logging
+
+
+# Configure logging (if not already configured elsewhere in your application)
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('app.log'),
+        logging.StreamHandler()
+    ]
+)
+
 
 # Load environment variables
 load_dotenv()
@@ -33,51 +46,93 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 def get_user_folder(access_token):
     """Create a user-specific folder using a hashed version of the access token."""
+    logger = logging.getLogger(__name__)
+    
+    logger.debug('Received access token: %s', access_token)
+    
+    # Hash the access token
     hashed_token = hashlib.sha256(access_token.encode()).hexdigest()
+    logger.debug('Hashed token: %s', hashed_token)
+    
+    # Define the user folder path
     user_folder = os.path.join(app.config['UPLOAD_FOLDER'], hashed_token)
-    os.makedirs(user_folder, exist_ok=True)
+    logger.debug('User folder path: %s', user_folder)
+    
+    try:
+        # Create the user-specific folder
+        os.makedirs(user_folder, exist_ok=True)
+        logger.info('Successfully created or verified folder: %s', user_folder)
+    except Exception as e:
+        logger.error('Failed to create folder %s due to: %s', user_folder, e)
+        raise
+    
     return user_folder
 
 def sanitize_filename(url):
     """Generate a safe and valid filename for URLs by using a hash."""
-    url_hash = hashlib.sha256(url.encode()).hexdigest()
-    return f"{url_hash}.txt"
+    logger = logging.getLogger(__name__)
+    
+    logger.debug('Received URL: %s', url)
+    
+    try:
+        # Hash the URL
+        url_hash = hashlib.sha256(url.encode()).hexdigest()
+        logger.debug('Generated hash: %s', url_hash)
+        
+        # Generate the filename
+        filename = f"{url_hash}.txt"
+        logger.debug('Sanitized filename: %s', filename)
+        
+    except Exception as e:
+        logger.error('Failed to sanitize filename for URL %s due to: %s', url, e)
+        raise
+    
+    return filename
 
 def upload_and_process_pack(pack_id, access_token, route):
-    logging.info("Uploading and processing pack with pack_id: %s", pack_id)
+    logger = logging.getLogger(__name__)
+    
+    logger.info("Uploading and processing pack with pack_id: %s", pack_id)
 
-    # Fetch the pack details from the external API
     auth_base_url = 'https://sourcebox-central-auth-8396932a641c.herokuapp.com'
     get_pack_url = f'{auth_base_url}/packman/{route}/{pack_id}'
 
     if not access_token:
-        logging.error("Access token missing. User is not authenticated.")
+        logger.error("Access token missing. User is not authenticated.")
         raise ValueError("User not authenticated")
 
     headers = {'Authorization': f'Bearer {access_token}'}
-
+    
+    # Fetch the pack details from the external API
     try:
+        logger.debug("Sending request to fetch pack details from URL: %s", get_pack_url)
         pack_response = requests.get(get_pack_url, headers=headers)
         pack_response.raise_for_status()
+        logger.debug("Received response with status code: %d", pack_response.status_code)
     except requests.RequestException as e:
-        logging.error(f"Error fetching pack details: {str(e)}")
+        logger.error("Error fetching pack details from %s: %s", get_pack_url, str(e))
         raise ValueError(f"Failed to retrieve pack details: {str(e)}")
 
     # Extract pack contents
     try:
         pack_data = pack_response.json()
         contents = pack_data.get('contents', [])
-        logging.info(f"Successfully retrieved pack contents. Number of entries: {len(contents)}")
+        logger.info("Successfully retrieved pack contents. Number of entries: %d", len(contents))
     except ValueError as e:
-        logging.error(f"Error parsing pack data: {str(e)}")
+        logger.error("Error parsing pack data from response: %s", str(e))
         raise ValueError(f"Error parsing pack data: {str(e)}")
 
     # Create a folder for this user using their access token hash
     user_folder = get_user_folder(access_token)
-    logging.info(f"Created upload folder for user with hashed token at path: {user_folder}")
+    logger.info("Created or verified upload folder for user with hashed token at path: %s", user_folder)
 
     # Ensure the user folder exists
-    os.makedirs(user_folder, exist_ok=True)
+    try:
+        os.makedirs(user_folder, exist_ok=True)
+        logger.debug("Ensured user folder exists at path: %s", user_folder)
+    except OSError as e:
+        logger.error("Error creating user folder at %s: %s", user_folder, str(e))
+        raise OSError(f"Failed to create user folder: {str(e)}")
 
     # Save each file or link content from the pack to the user's folder
     for content in contents:
@@ -88,28 +143,29 @@ def upload_and_process_pack(pack_id, access_token, route):
         # If this is a link, generate a valid filename using a hash
         if data_type == 'link':
             filename = sanitize_filename(file_content)
+            logger.debug("Generated filename for link content: %s", filename)
 
         # Ensure we have a valid filename for saving files
         if not filename:
             filename = f"data_{data_type}.txt"
+            logger.debug("No filename provided; using default filename: %s", filename)
 
-        # Save the content for both files and links as text files in the user's folder
         file_path = os.path.join(user_folder, filename)
         
         try:
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write(file_content)
-            logging.info(f"Saved {data_type} content to file: {filename}")
+            logger.info("Saved %s content to file: %s", data_type, filename)
         except IOError as e:
-            logging.error(f"Error saving {data_type} to {filename}: {str(e)}")
+            logger.error("Error saving %s content to %s: %s", data_type, filename, str(e))
             raise IOError(f"Failed to save {data_type} content to file: {filename}: {str(e)}")
 
     # Process files and save embeddings
     try:
         project_to_vector(user_folder, access_token)  # Pass the folder path to the vectorization function
-        logging.info("Processed pack and saved embeddings for user folder: %s", user_folder)
+        logger.info("Processed pack and saved embeddings for user folder: %s", user_folder)
     except Exception as e:
-        logging.error(f"Error processing files for user folder: {user_folder}. Error: {str(e)}")
+        logger.error("Error processing files for user folder %s: %s", user_folder, str(e))
         raise Exception(f"Error processing files for user folder: {str(e)}")
 
     return {"message": "Pack uploaded and processed successfully", "folder": user_folder}
