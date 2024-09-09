@@ -16,13 +16,19 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 # Initialize the embedding function
 embedding_function = CustomEmbeddingFunction(client)
 
-def project_to_vector(user_folder_path):
-    failed_files = []
+def project_to_vector(user_folder_path, access_token):
+    """Process files in the user folder and create a user-specific DeepLake dataset."""
+    
+    # Create a unique user dataset path using a hashed token
+    hashed_token = hashlib.sha256(access_token.encode()).hexdigest()
+    dataset_path = os.path.join("my_deeplake", hashed_token)
+    
+    # Ensure the dataset folder exists
+    os.makedirs(dataset_path, exist_ok=True)
 
     logging.info(f"Processing files for embedding from folder: {user_folder_path}")
     
-    # Initialize DeepLake dataset, ensure the correct dataset path
-    dataset_path = os.path.join("my_deeplake", os.path.basename(user_folder_path))  # Dataset path based on user folder name
+    # Initialize DeepLake instance for the specific user
     db = DeepLake(dataset_path=dataset_path, embedding=embedding_function, overwrite=True)
     
     # Define allowed file extensions
@@ -31,6 +37,8 @@ def project_to_vector(user_folder_path):
         ".js", ".docx", ".xlsx", "Dockerfile", "Procfile", ".gitignore",
         ".java", ".rb", ".go", ".sh", ".php", ".cs", ".cpp", ".c", ".ts", ".swift", ".kt", ".rs", ".r", ".scala", ".pl", ".sql"
     }
+
+    failed_files = []
 
     for root, dirs, files in os.walk(user_folder_path):
         for filename in files:
@@ -45,7 +53,10 @@ def project_to_vector(user_folder_path):
                 try:
                     loader = TextLoader(file_path)
                     documents = loader.load()
-                    text_splitter = CharacterTextSplitter(chunk_size=1500, chunk_overlap=100)
+
+                    # Split the document respecting OpenAI's token limits
+                    max_chunk_size = 8192 - 100  # Keep chunks within token limit with some buffer
+                    text_splitter = CharacterTextSplitter(chunk_size=max_chunk_size, chunk_overlap=100)
                     docs = text_splitter.split_documents(documents)
                     logging.info(f"Successfully split document: {filename} into {len(docs)} chunks.")
                 except Exception as e:
@@ -54,12 +65,11 @@ def project_to_vector(user_folder_path):
                     continue
 
                 try:
-                    db.add_documents(docs)
+                    db.add_documents(docs)  # Add documents to the user's specific DeepLake dataset
                     logging.info(f"Successfully added documents from file: {filename}")
                 except Exception as e:
                     failed_files.append(file_path)
                     logging.error(f"Failed to add documents from file: {filename}, Error: {e}")
-
 
     if failed_files:
         logging.error(f"The following files failed to process: {failed_files}")
@@ -67,6 +77,7 @@ def project_to_vector(user_folder_path):
         logging.info("All files processed successfully.")
 
     return db
+
 
 
 
