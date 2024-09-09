@@ -18,7 +18,7 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 embedding_function = CustomEmbeddingFunction(client)
 
 def project_to_vector(user_folder_path, access_token):
-    """Process files in the user folder and create a user-specific DeepLake dataset."""
+    """Process files in the user folder, clear existing dataset, and create a user-specific DeepLake dataset."""
 
     logging.info(f"Starting vectorization for user folder: {user_folder_path}")
     logging.info(f"Access token (hashed): {hashlib.sha256(access_token.encode()).hexdigest()}")
@@ -33,7 +33,20 @@ def project_to_vector(user_folder_path, access_token):
         os.makedirs(dataset_path, exist_ok=True)
         logging.info(f"Directory {dataset_path} created/exists.")
         
-        # Initialize DeepLake instance for the specific user
+        # Initialize DeepLake instance for the specific user and remove existing data
+        logging.info(f"Checking if the dataset needs to be cleared for user: {hashed_token}")
+        
+        if os.path.exists(dataset_path):
+            logging.info(f"Flushing existing dataset at {dataset_path}...")
+            try:
+                shutil.rmtree(dataset_path)  # Remove the folder and all its contents
+                os.makedirs(dataset_path, exist_ok=True)  # Recreate an empty dataset directory
+                logging.info(f"Successfully cleared and recreated dataset folder at {dataset_path}.")
+            except Exception as e:
+                logging.error(f"Failed to clear the dataset folder {dataset_path}: {e}")
+                raise Exception(f"Could not clear dataset folder: {e}")
+        
+        # Initialize DeepLake instance after clearing
         db = DeepLake(dataset_path=dataset_path, embedding=embedding_function, overwrite=True)
         logging.info(f"DeepLake instance initialized for path: {dataset_path}")
         
@@ -91,6 +104,7 @@ def project_to_vector(user_folder_path, access_token):
     except Exception as e:
         logging.error(f"Error in vectorization process: {str(e)}", exc_info=True)
         raise
+
 
 if __name__ == "__main__":
     # Example test run
