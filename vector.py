@@ -56,7 +56,7 @@ def project_to_vector(user_folder_path, access_token):
                     documents = loader.load()
 
                     # Split the document respecting OpenAI's token limits
-                    max_chunk_size = 8192 - 100  # Keep chunks within token limit with some buffer
+                    max_chunk_size = 7192 - 100  # Keep chunks within token limit with some buffer
                     text_splitter = CharacterTextSplitter(chunk_size=max_chunk_size, chunk_overlap=100)
                     docs = text_splitter.split_documents(documents)
                     logging.info(f"Successfully split document: {filename} into {len(docs)} chunks.")
