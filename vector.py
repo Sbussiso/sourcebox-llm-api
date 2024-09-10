@@ -18,27 +18,16 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 # Initialize the embedding function
 embedding_function = CustomEmbeddingFunction(client)
 
-def verify_dataset_empty(db, dataset_path):
-    """Check if the dataset is empty."""
-    try:
-        docs = db.similarity_search("dummy query")
-        if len(docs) > 0:
-            logging.warning(f"Dataset at {dataset_path} is NOT empty after deletion. Found {len(docs)} documents.")
-        else:
-            logging.info(f"Dataset at {dataset_path} is confirmed to be empty.")
-    except Exception as e:
-        logging.error(f"Error checking dataset emptiness: {str(e)}", exc_info=True)
 
-def project_to_vector(user_folder_path, access_token):
+def project_to_vector(user_folder_path, user_id, pack_id):
     """Process files in the user folder, ensure proper cleanup, and create a user-specific DeepLake dataset."""
 
     logging.info(f"Starting vectorization for user folder: {user_folder_path}")
-    logging.info(f"Access token (hashed): {hashlib.sha256(access_token.encode()).hexdigest()}")
+    logging.info(f"User ID: {user_id}, Pack ID: {pack_id}")
 
     try:
-        # Create a unique user dataset path using a hashed token
-        hashed_token = hashlib.sha256(access_token.encode()).hexdigest()  # Ensures uniqueness for each user
-        dataset_path = os.path.join("my_deeplake", hashed_token)
+        # Create a unique dataset path using user_id and pack_id
+        dataset_path = os.path.join("my_deeplake", user_id, pack_id, "actual_deeplake_name")
         logging.info(f"Dataset path: {dataset_path}")
 
         # Ensure the dataset folder exists and clear it before use
@@ -69,9 +58,7 @@ def project_to_vector(user_folder_path, access_token):
         db = DeepLake(dataset_path=dataset_path, embedding=embedding_function, overwrite=True)
         logging.info(f"DeepLake instance initialized for path: {dataset_path}")
 
-        # Verify that the dataset is indeed empty
-        verify_dataset_empty(db, dataset_path)
-
+        
         # Define allowed file extensions
         allowed_extensions = {
             ".py", ".txt", ".csv", ".json", ".md", ".html", ".xml", ".yaml", ".yml", ".pdf",
@@ -129,6 +116,7 @@ def project_to_vector(user_folder_path, access_token):
 
 if __name__ == "__main__":
     # Example test run
-    user_folder_path = 'uploads/12b593a49c6be1fe2638968d5a022c19fab46bfc7d85f5b990d99a88856d8775'
-    access_token = "example_access_token"  # Replace with actual access token for testing
-    project_to_vector(user_folder_path, access_token)
+    user_folder_path = 'uploads/3c308c688090b826ecd9f454f848ebaebf27e15b4cc757a7b5f39391ed5232d0'
+    user_id = "1"  # Replace with actual user_id
+    pack_id = "1"  # Replace with actual pack_id
+    project_to_vector(user_folder_path, user_id, pack_id)

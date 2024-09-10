@@ -5,6 +5,7 @@ import os
 from dotenv import load_dotenv
 import logging
 
+# Set up logging
 logging.basicConfig(
     level=logging.DEBUG,  # Minimum level of severity to capture
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',  # Log message format
@@ -14,7 +15,7 @@ logging.basicConfig(
     ]
 )
 
-
+# Load environment variables
 load_dotenv()
 
 def perform_query(db_instance, query):
@@ -63,15 +64,28 @@ def perform_query(db_instance, query):
         logging.error(f"An error occurred during the similarity search: {e}", exc_info=True)
         return {}
 
-
 if __name__ == "__main__":
     # Initialize OpenAI client
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
     # Initialize the embedding function
     embedding_function = CustomEmbeddingFunction(client)
-    db = DeepLake(dataset_path="./my_deeplake/", embedding=embedding_function, read_only=True)
+
+    # Define user_id and pack_id dynamically
+    user_id = "example_user_id"  # Replace with the actual user_id
+    pack_id = "example_pack_id"  # Replace with the actual pack_id
+
+    # Construct the DeepLake dataset path based on user_id and pack_id
+    dataset_path = os.path.join("my_deeplake", user_id, pack_id, "actual_deeplake_name")
+
+    # Initialize DeepLake instance
+    logging.info(f"Loading DeepLake from path: {dataset_path}")
+    db = DeepLake(dataset_path=dataset_path, embedding=embedding_function, read_only=True)
     
+    # Define the query
     query = "where is the database being used"
+
+    # Perform the query and process the response
     response = perform_query(db, query)
     for key, value in response.items():
         print(f"{key}: {value}")
