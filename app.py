@@ -88,87 +88,105 @@ def sanitize_filename(url):
 
 
 def upload_and_process_pack(user_id, pack_id, route):
+    # Initialize a logger instance to track the process
     logger = logging.getLogger(__name__)
     
+    # Log the initiation of the upload and processing action
     logger.info("Uploading and processing pack with pack_id: %s for user_id: %s", pack_id, user_id)
 
+    # Define the base URL of the external API and the specific endpoint to retrieve the pack details
     auth_base_url = 'https://sourcebox-central-auth-8396932a641c.herokuapp.com'
     get_pack_url = f'{auth_base_url}/packman/{route}/{pack_id}'
 
-    # Retrieve the access_token from the session
+    # Retrieve the access token from the session to authenticate the API request
     access_token = session.get('access_token')
     if not access_token:
+        # If the access token is not found in the session, log the error and raise a ValueError
         logger.error("Access token not found in session. User not authenticated.")
         raise ValueError("User not authenticated")
 
+    # Set the Authorization header with the Bearer token for the API request
     headers = {'Authorization': f'Bearer {access_token}'}
     
-    # Fetch the pack details from the external API
+    # Fetch the pack details from the external API using the access token for authentication
     try:
         logger.debug("Sending request to fetch pack details from URL: %s", get_pack_url)
         pack_response = requests.get(get_pack_url, headers=headers)
+        # Raise an exception for any non-2xx response from the server
         pack_response.raise_for_status()
         logger.debug("Received response with status code: %d", pack_response.status_code)
     except requests.RequestException as e:
+        # Log any request or network-related errors and raise a ValueError
         logger.error("Error fetching pack details from %s: %s", get_pack_url, str(e))
         raise ValueError(f"Failed to retrieve pack details: {str(e)}")
 
-    # Extract pack contents
+    # Extract and parse the contents of the pack from the response
     try:
+        # Convert the response to JSON format
         pack_data = pack_response.json()
-        contents = pack_data.get('contents', [])
+        contents = pack_data.get('contents', [])  # Get the list of contents from the response
         logger.info("Successfully retrieved pack contents. Number of entries: %d", len(contents))
     except ValueError as e:
+        # Log parsing errors if the JSON response is invalid
         logger.error("Error parsing pack data from response: %s", str(e))
         raise ValueError(f"Error parsing pack data: {str(e)}")
 
-    # Create a folder for this user using their user_id
+    # Create a folder for the user using their user ID
     user_folder = get_user_folder(user_id)
     logger.info("Created or verified upload folder for user with ID %s at path: %s", user_id, user_folder)
 
-    # Ensure the user folder exists
+    # Ensure the folder for the user exists; if not, create it
     try:
         os.makedirs(user_folder, exist_ok=True)
         logger.debug("Ensured user folder exists at path: %s", user_folder)
     except OSError as e:
+        # Log errors related to file operations (e.g., permission issues, etc.)
         logger.error("Error creating user folder at %s: %s", user_folder, str(e))
         raise OSError(f"Failed to create user folder: {str(e)}")
 
-    # Save each file or link content from the pack to the user's folder
+    # Iterate through the contents of the pack (links, files, etc.)
     for content in contents:
+        # Determine the data type (e.g., 'link' or 'file') and retrieve the content and filename
         data_type = content.get('data_type')
         file_content = content.get('content')
         filename = content.get('filename')
 
-        # If this is a link, generate a valid filename using a hash
+        # If the content is a link, sanitize the URL to generate a valid filename
         if data_type == 'link':
             filename = sanitize_filename(file_content)
             logger.debug("Generated filename for link content: %s", filename)
 
-        # Ensure we have a valid filename for saving files
+        # If the filename is not provided, generate a default filename based on the data type
         if not filename:
             filename = f"data_{data_type}.txt"
             logger.debug("No filename provided; using default filename: %s", filename)
 
+        # Define the file path where the content will be saved
         file_path = os.path.join(user_folder, filename)
         
+        # Save the content (either file or link) to the user's folder
         try:
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write(file_content)
             logger.info("Saved %s content to file: %s", data_type, filename)
         except IOError as e:
+            # Log any I/O errors encountered during file writing
             logger.error("Error saving %s content to %s: %s", data_type, filename, str(e))
             raise IOError(f"Failed to save {data_type} content to file: {filename}: {str(e)}")
 
-    # Process files and save embeddings with user_id and pack_id
+    # Process the uploaded files and save embeddings using the project_to_vector function
     try:
-        project_to_vector(user_folder, user_id, pack_id)  # Pass user_id and pack_id to the function
+        # Pass the user folder path, user ID, and pack ID to the vectorization function
+        project_to_vector(user_folder, user_id, pack_id)
         logger.info("Processed pack and saved embeddings for user folder: %s", user_folder)
     except Exception as e:
+        # Log any errors encountered during the vectorization process
         logger.error("Error processing files for user folder %s: %s", user_folder, str(e))
         raise Exception(f"Error processing files for user folder: {str(e)}")
 
+    # Return a success message along with the path to the user folder
     return {"message": "Pack uploaded and processed successfully", "folder": user_folder}
+
 
 # ChatGPT Response Function
 def chatgpt_response(prompt, history=None, vector_results=None):
@@ -180,6 +198,7 @@ def chatgpt_response(prompt, history=None, vector_results=None):
         ]
     )
     return response.choices[0].message.content
+
 
 # DeepQueryCode Resource
 class DeepQueryCode(Resource):
@@ -246,6 +265,7 @@ class DeepQueryCode(Resource):
         except Exception as e:
             logging.error("Exception occurred: %s", str(e))
             return {"error": str(e)}, 500
+
 
 #regular deepquery Resource
 class DeepQuery(Resource):
@@ -443,8 +463,6 @@ class DeepQueryRaw(Resource):
         except Exception as e:
             logging.error("Exception occurred: %s", str(e))
             return {"error": str(e)}, 500
-
-
 
 
 
