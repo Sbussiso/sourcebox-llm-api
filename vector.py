@@ -18,6 +18,17 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 # Initialize the embedding function
 embedding_function = CustomEmbeddingFunction(client)
 
+def verify_dataset_empty(db, dataset_path):
+    """Check if the dataset is empty."""
+    try:
+        docs = db.similarity_search("dummy query")
+        if len(docs) > 0:
+            logging.warning(f"Dataset at {dataset_path} is NOT empty after deletion. Found {len(docs)} documents.")
+        else:
+            logging.info(f"Dataset at {dataset_path} is confirmed to be empty.")
+    except Exception as e:
+        logging.error(f"Error checking dataset emptiness: {str(e)}", exc_info=True)
+
 def project_to_vector(user_folder_path, access_token):
     """Process files in the user folder, ensure proper cleanup, and create a user-specific DeepLake dataset."""
 
@@ -57,6 +68,9 @@ def project_to_vector(user_folder_path, access_token):
         # Initialize DeepLake instance after clearing
         db = DeepLake(dataset_path=dataset_path, embedding=embedding_function, overwrite=True)
         logging.info(f"DeepLake instance initialized for path: {dataset_path}")
+
+        # Verify that the dataset is indeed empty
+        verify_dataset_empty(db, dataset_path)
 
         # Define allowed file extensions
         allowed_extensions = {
