@@ -204,7 +204,8 @@ class DeepQueryCode(Resource):
 
             # TODO: Replace this with a function to get user_id from the token
             # You may want to fetch the user_id from the token or session
-            user_id = "example_user_id"  # Replace this with actual logic to fetch user_id
+            user_id = session.get('user_id')  # Replace this with actual logic to fetch user_id
+            user_id = str(user_id)
 
             # Process the pack if a pack_id is provided
             if pack_id:
@@ -269,7 +270,8 @@ class DeepQuery(Resource):
 
             # TODO: Replace this with a function to get user_id from the token
             # You may want to fetch the user_id from the token or session
-            user_id = "example_user_id"  # Replace this with actual logic to fetch user_id
+            user_id = session.get('user_id')  # Replace this with actual logic to fetch user_id
+            user_id = str(user_id)
 
             # Process the pack if a pack_id is provided
             if pack_id:
@@ -335,7 +337,8 @@ class DeepQueryCodeRaw(Resource):
 
             # TODO: Replace this with a function to get user_id from the token
             # You may want to fetch the user_id from the token or session
-            user_id = "example_user_id"  # Replace this with actual logic to fetch user_id
+            user_id = session.get('user_id')  # Replace this with actual logic to fetch user_id
+            user_id = str(user_id)
             
             # Process the pack if a pack_id is provided
             if pack_id:
@@ -399,7 +402,8 @@ class DeepQueryRaw(Resource):
 
             # TODO: Replace this with a function to get user_id from the token
             # You may want to fetch the user_id from the token or session
-            user_id = "example_user_id"  # Replace this with actual logic to fetch user_id
+            user_id = session.get('user_id')  # Replace this with actual logic to fetch user_id
+            user_id = str(user_id)
             
             # Process the pack if a pack_id is provided
             if pack_id:
@@ -441,10 +445,13 @@ class DeepQueryRaw(Resource):
             return {"error": str(e)}, 500
 
 
-# login resource
+
+
+
+# Login Resource
 class Login(Resource):
     def post(self):
-        logger = logging.getLogger(__name__)  # Reuse global logging configuration
+        logger = logging.getLogger(__name__)
         logger.info("Entered UserLogin post method")
         try:
             data = request.get_json()
@@ -457,10 +464,11 @@ class Login(Resource):
 
             auth_base_url = 'https://sourcebox-central-auth-8396932a641c.herokuapp.com'
             login_url = f'{auth_base_url}/login'
+            get_user_id_url = f'{auth_base_url}/user/id'  # New endpoint to get user ID
             payload = {'email': email, 'password': password}
 
+            # Authenticate and retrieve access token
             response = requests.post(login_url, json=payload)
-
             if response.status_code == 200:
                 access_token = response.json().get('access_token')
                 if not access_token:
@@ -468,8 +476,26 @@ class Login(Resource):
                     return {"message": "Failed to retrieve access token"}, 500
 
                 session['access_token'] = access_token
-                logger.info(f"User {email} logged in successfully")
-                return {"access_token": access_token}, 200
+
+                # Now fetch the user ID using the access token
+                headers = {'Authorization': f'Bearer {access_token}'}
+                user_id_response = requests.get(get_user_id_url, headers=headers)
+
+                if user_id_response.status_code == 200:
+                    user_id = user_id_response.json().get('user_id')
+                    if not user_id:
+                        logger.error("User ID not found in the response")
+                        return {"message": "Failed to retrieve user ID"}, 500
+
+                    # Store the user_id in the session
+                    session['user_id'] = user_id
+
+                    logger.info(f"User {email} logged in successfully with user ID {user_id}")
+                    return {"access_token": access_token, "user_id": user_id}, 200
+                else:
+                    logger.error(f"Failed to retrieve user ID: {user_id_response.text}")
+                    return {"error": f"Failed to retrieve user ID: {user_id_response.text}"}, user_id_response.status_code
+
             else:
                 logger.error(f"Login failed: {response.text}")
                 return {"error": f"Login failed: {response.text}"}, response.status_code
@@ -477,10 +503,6 @@ class Login(Resource):
         except Exception as e:
             logger.error(f"Unexpected error during user login: {str(e)}", exc_info=True)
             return {"error": "Something went wrong"}, 500
-
-
-
-
 
 
 
