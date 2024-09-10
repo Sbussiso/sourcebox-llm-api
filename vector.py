@@ -19,7 +19,7 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 embedding_function = CustomEmbeddingFunction(client)
 
 
-def project_to_vector(user_folder_path, user_id, pack_id):
+def project_to_vector(user_folder_path, user_id, pack_id, pack_type):
     """Process files in the user folder, ensure proper cleanup, and create a user-specific DeepLake dataset."""
 
     logging.info(f"Starting vectorization for user folder: {user_folder_path}")
@@ -27,7 +27,7 @@ def project_to_vector(user_folder_path, user_id, pack_id):
 
     try:
         # Create a unique dataset path using user_id and pack_id
-        dataset_path = os.path.join("my_deeplake", user_id, pack_id, "actual_deeplake_name")
+        dataset_path = os.path.join("my_deeplake", user_id, pack_type, pack_id, "actual_deeplake_name")
         logging.info(f"Dataset path: {dataset_path}")
 
         # Ensure the dataset folder exists and clear it before use

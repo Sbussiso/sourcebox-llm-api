@@ -87,12 +87,15 @@ def sanitize_filename(url):
     return filename
 
 
-def upload_and_process_pack(user_id, pack_id, route):
-    # Initialize a logger instance to track the process
+def upload_and_process_pack(user_id, pack_id, route, pack_type):
+    """
+    This function uploads and processes a given pack for a user, identified by their user_id and pack_id. 
+    The `pack_type` distinguishes between different types of packs (e.g., 'pack' or 'code_pack').
+    """
     logger = logging.getLogger(__name__)
-    
+
     # Log the initiation of the upload and processing action
-    logger.info("Uploading and processing pack with pack_id: %s for user_id: %s", pack_id, user_id)
+    logger.info("Uploading and processing %s with pack_id: %s for user_id: %s", pack_type, pack_id, user_id)
 
     # Define the base URL of the external API and the specific endpoint to retrieve the pack details
     auth_base_url = 'https://sourcebox-central-auth-8396932a641c.herokuapp.com'
@@ -101,33 +104,28 @@ def upload_and_process_pack(user_id, pack_id, route):
     # Retrieve the access token from the session to authenticate the API request
     access_token = session.get('access_token')
     if not access_token:
-        # If the access token is not found in the session, log the error and raise a ValueError
         logger.error("Access token not found in session. User not authenticated.")
         raise ValueError("User not authenticated")
 
     # Set the Authorization header with the Bearer token for the API request
     headers = {'Authorization': f'Bearer {access_token}'}
-    
+
     # Fetch the pack details from the external API using the access token for authentication
     try:
         logger.debug("Sending request to fetch pack details from URL: %s", get_pack_url)
         pack_response = requests.get(get_pack_url, headers=headers)
-        # Raise an exception for any non-2xx response from the server
         pack_response.raise_for_status()
         logger.debug("Received response with status code: %d", pack_response.status_code)
     except requests.RequestException as e:
-        # Log any request or network-related errors and raise a ValueError
         logger.error("Error fetching pack details from %s: %s", get_pack_url, str(e))
         raise ValueError(f"Failed to retrieve pack details: {str(e)}")
 
     # Extract and parse the contents of the pack from the response
     try:
-        # Convert the response to JSON format
         pack_data = pack_response.json()
-        contents = pack_data.get('contents', [])  # Get the list of contents from the response
+        contents = pack_data.get('contents', [])
         logger.info("Successfully retrieved pack contents. Number of entries: %d", len(contents))
     except ValueError as e:
-        # Log parsing errors if the JSON response is invalid
         logger.error("Error parsing pack data from response: %s", str(e))
         raise ValueError(f"Error parsing pack data: {str(e)}")
 
@@ -135,12 +133,11 @@ def upload_and_process_pack(user_id, pack_id, route):
     user_folder = get_user_folder(user_id)
     logger.info("Created or verified upload folder for user with ID %s at path: %s", user_id, user_folder)
 
-    # Ensure the folder for the user exists; if not, create it
+    # Ensure the user folder exists; if not, create it
     try:
         os.makedirs(user_folder, exist_ok=True)
         logger.debug("Ensured user folder exists at path: %s", user_folder)
     except OSError as e:
-        # Log errors related to file operations (e.g., permission issues, etc.)
         logger.error("Error creating user folder at %s: %s", user_folder, str(e))
         raise OSError(f"Failed to create user folder: {str(e)}")
 
@@ -163,29 +160,27 @@ def upload_and_process_pack(user_id, pack_id, route):
 
         # Define the file path where the content will be saved
         file_path = os.path.join(user_folder, filename)
-        
+
         # Save the content (either file or link) to the user's folder
         try:
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write(file_content)
             logger.info("Saved %s content to file: %s", data_type, filename)
         except IOError as e:
-            # Log any I/O errors encountered during file writing
             logger.error("Error saving %s content to %s: %s", data_type, filename, str(e))
             raise IOError(f"Failed to save {data_type} content to file: {filename}: {str(e)}")
 
     # Process the uploaded files and save embeddings using the project_to_vector function
     try:
-        # Pass the user folder path, user ID, and pack ID to the vectorization function
-        project_to_vector(user_folder, user_id, pack_id)
-        logger.info("Processed pack and saved embeddings for user folder: %s", user_folder)
+        # Pass the user folder path, user ID, pack ID, and pack type to the vectorization function
+        project_to_vector(user_folder, user_id, pack_id, pack_type)
+        logger.info("Processed %s and saved embeddings for user folder: %s", pack_type, user_folder)
     except Exception as e:
-        # Log any errors encountered during the vectorization process
         logger.error("Error processing files for user folder %s: %s", user_folder, str(e))
         raise Exception(f"Error processing files for user folder: {str(e)}")
 
     # Return a success message along with the path to the user folder
-    return {"message": "Pack uploaded and processed successfully", "folder": user_folder}
+    return {"message": f"{pack_type} uploaded and processed successfully", "folder": user_folder}
 
 
 # ChatGPT Response Function
@@ -221,28 +216,33 @@ class DeepQueryCode(Resource):
             # Extract the token by stripping the 'Bearer ' part
             access_token = auth_header.split(' ')[1]
 
-            # TODO: Replace this with a function to get user_id from the token
-            # You may want to fetch the user_id from the token or session
-            user_id = session.get('user_id')  # Replace this with actual logic to fetch user_id
+            # Get the user ID from the session (assuming it's stored in session after login)
+            user_id = session.get('user_id')
+            if not user_id:
+                logging.error("User ID not found in session.")
+                return {"error": "User not authenticated"}, 401
             user_id = str(user_id)
+
+            # Set the pack type to "code_pack"
+            pack_type = "code_pack"
 
             # Process the pack if a pack_id is provided
             if pack_id:
-                logging.info("Processing pack with pack_id: %s", pack_id)
+                logging.info("Processing code pack with pack_id: %s", pack_id)
                 route = 'code/details'
-                upload_and_process_pack(user_id, pack_id, route)  # Pass user_id and pack_id to the function
+                upload_and_process_pack(user_id, pack_id, route, pack_type)  # Pass user_id, pack_id, route, and pack_type
 
             # Get the user-specific folder for vector querying
             user_folder = get_user_folder(user_id)
 
-            # Set the correct dataset path for DeepLake based on user_id and pack_id
-            deeplake_folder_path = os.path.join("my_deeplake", user_id, pack_id, "actual_deeplake_name")
+            # Set the correct dataset path for DeepLake based on user_id, pack_id, and pack_type
+            deeplake_folder_path = os.path.join("my_deeplake", user_id, pack_type, pack_id, "actual_deeplake_name")
 
             if os.path.exists(deeplake_folder_path) and os.path.isdir(deeplake_folder_path):
                 logging.info("The my_deeplake folder exists for user folder: %s", user_folder)
             else:
                 logging.info("The my_deeplake folder does not exist. Running project_to_vector.")
-                project_to_vector(user_folder, user_id, pack_id)
+                project_to_vector(user_folder, user_id, pack_id, pack_type)  # Pass the pack_type to project_to_vector
 
             # Perform vector query
             logging.info("Performing vector query with user_message: %s", user_message)
@@ -288,28 +288,33 @@ class DeepQuery(Resource):
             # Extract the token by stripping the 'Bearer ' part
             access_token = auth_header.split(' ')[1]
 
-            # TODO: Replace this with a function to get user_id from the token
-            # You may want to fetch the user_id from the token or session
-            user_id = session.get('user_id')  # Replace this with actual logic to fetch user_id
+            # Get the user ID from the session (assuming it's stored in session after login)
+            user_id = session.get('user_id')
+            if not user_id:
+                logging.error("User ID not found in session.")
+                return {"error": "User not authenticated"}, 401
             user_id = str(user_id)
+
+            # Set the pack type to "pack"
+            pack_type = "pack"
 
             # Process the pack if a pack_id is provided
             if pack_id:
-                logging.info("Processing pack with pack_id: %s", pack_id)
+                logging.info("Processing regular pack with pack_id: %s", pack_id)
                 route = 'pack/details'
-                upload_and_process_pack(user_id, pack_id, route)  # Pass user_id and pack_id to the function
+                upload_and_process_pack(user_id, pack_id, route, pack_type)  # Pass user_id, pack_id, route, and pack_type
 
             # Get the user-specific folder for vector querying
             user_folder = get_user_folder(user_id)
 
-            # Set the correct dataset path for DeepLake based on user_id and pack_id
-            deeplake_folder_path = os.path.join("my_deeplake", user_id, pack_id, "actual_deeplake_name")
+            # Set the correct dataset path for DeepLake based on user_id, pack_id, and pack_type
+            deeplake_folder_path = os.path.join("my_deeplake", user_id, pack_type, pack_id, "actual_deeplake_name")
 
             if os.path.exists(deeplake_folder_path) and os.path.isdir(deeplake_folder_path):
                 logging.info("The my_deeplake folder exists for user folder: %s", user_folder)
             else:
                 logging.info("The my_deeplake folder does not exist. Running project_to_vector.")
-                project_to_vector(user_folder, user_id, pack_id)
+                project_to_vector(user_folder, user_id, pack_id, pack_type)  # Pass the pack_type to project_to_vector
 
             # Perform vector query
             logging.info("Performing vector query with user_message: %s", user_message)
@@ -334,7 +339,6 @@ class DeepQuery(Resource):
             return {"error": str(e)}, 500
 
 
-
 #raw deepquery code resource
 class DeepQueryCodeRaw(Resource):
     def post(self):
@@ -355,28 +359,33 @@ class DeepQueryCodeRaw(Resource):
             # Extract the token by stripping the 'Bearer ' part
             access_token = auth_header.split(' ')[1]
 
-            # TODO: Replace this with a function to get user_id from the token
-            # You may want to fetch the user_id from the token or session
-            user_id = session.get('user_id')  # Replace this with actual logic to fetch user_id
+            # Get the user ID from the session (assuming it's stored in session after login)
+            user_id = session.get('user_id')
+            if not user_id:
+                logging.error("User ID not found in session.")
+                return {"error": "User not authenticated"}, 401
             user_id = str(user_id)
+
+            # Set the pack type to "code_pack" for code-specific packs
+            pack_type = "code_pack"
             
             # Process the pack if a pack_id is provided
             if pack_id:
-                logging.info("Processing pack with pack_id: %s", pack_id)
+                logging.info("Processing code pack with pack_id: %s", pack_id)
                 route = 'code/details'
-                upload_and_process_pack(user_id, pack_id, route)  # Pass user_id and pack_id
+                upload_and_process_pack(user_id, pack_id, route, pack_type)  # Pass user_id, pack_id, route, and pack_type
                 
             # Get the user-specific folder for vector querying
             user_folder = get_user_folder(user_id)
 
-            # Set the correct dataset path for DeepLake based on user_id and pack_id
-            deeplake_folder_path = os.path.join("my_deeplake", user_id, pack_id, "actual_deeplake_name")
+            # Set the correct dataset path for DeepLake based on user_id, pack_id, and pack_type
+            deeplake_folder_path = os.path.join("my_deeplake", user_id, pack_type, pack_id, "actual_deeplake_name")
 
             if os.path.exists(deeplake_folder_path) and os.path.isdir(deeplake_folder_path):
                 logging.info("The my_deeplake folder exists for user folder: %s", user_folder)
             else:
                 logging.info("The my_deeplake folder does not exist. Running project_to_vector.")
-                project_to_vector(user_folder, user_id, pack_id)
+                project_to_vector(user_folder, user_id, pack_id, pack_type)  # Pass the pack_type to project_to_vector
 
             # Perform vector query
             logging.info("Performing vector query with user_message: %s", user_message)
@@ -398,7 +407,6 @@ class DeepQueryCodeRaw(Resource):
         except Exception as e:
             logging.error("Exception occurred: %s", str(e))
             return {"error": str(e)}, 500
-
 
 #raw deepquery resource
 class DeepQueryRaw(Resource):
@@ -420,28 +428,33 @@ class DeepQueryRaw(Resource):
             # Extract the token by stripping the 'Bearer ' part
             access_token = auth_header.split(' ')[1]
 
-            # TODO: Replace this with a function to get user_id from the token
-            # You may want to fetch the user_id from the token or session
-            user_id = session.get('user_id')  # Replace this with actual logic to fetch user_id
+            # Get the user ID from the session (assuming it's stored in session after login)
+            user_id = session.get('user_id')
+            if not user_id:
+                logging.error("User ID not found in session.")
+                return {"error": "User not authenticated"}, 401
             user_id = str(user_id)
+
+            # Set the pack type to "pack" for regular packs
+            pack_type = "pack"
             
             # Process the pack if a pack_id is provided
             if pack_id:
                 logging.info("Processing pack with pack_id: %s", pack_id)
                 route = 'pack/details'
-                upload_and_process_pack(user_id, pack_id, route)  # Pass user_id and pack_id
+                upload_and_process_pack(user_id, pack_id, route, pack_type)  # Pass user_id, pack_id, and pack_type
                 
             # Get the user-specific folder for vector querying
             user_folder = get_user_folder(user_id)
 
-            # Set the correct dataset path for DeepLake based on user_id and pack_id
-            deeplake_folder_path = os.path.join("my_deeplake", user_id, pack_id, "actual_deeplake_name")
+            # Set the correct dataset path for DeepLake based on user_id, pack_id, and pack_type
+            deeplake_folder_path = os.path.join("my_deeplake", user_id, pack_type, pack_id, "actual_deeplake_name")
 
             if os.path.exists(deeplake_folder_path) and os.path.isdir(deeplake_folder_path):
                 logging.info("The my_deeplake folder exists for user folder: %s", user_folder)
             else:
                 logging.info("The my_deeplake folder does not exist. Running project_to_vector.")
-                project_to_vector(user_folder, user_id, pack_id)
+                project_to_vector(user_folder, user_id, pack_id, pack_type)  # Pass the pack_type to project_to_vector
 
             # Perform vector query
             logging.info("Performing vector query with user_message: %s", user_message)
@@ -463,7 +476,6 @@ class DeepQueryRaw(Resource):
         except Exception as e:
             logging.error("Exception occurred: %s", str(e))
             return {"error": str(e)}, 500
-
 
 
 # Login Resource

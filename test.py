@@ -235,9 +235,11 @@ if __name__ == '__main__':
         # deepquery-code tests
         print("\nTesting /deepquery-code-raw with user_message only...")
         test_deepquery_code_raw_message(user_message_code, pack_id_code)
+        print("\n\n")
 
         print("\nTesting /deepquery-code-raw with pack data...")
         test_deepquery_code_raw_with_pack(user_message_code, pack_id_code)
+        print("\n\n\n")
 
 
         # Separate inputs for deepquery tests
@@ -247,9 +249,12 @@ if __name__ == '__main__':
         # deepquery tests
         print("\nTesting /deepquery-raw with user_message only...")
         test_deepquery_raw_message(user_message_data, pack_id_data)
+        print("\n\n")
+
 
         print("\nTesting /deepquery-raw with pack data...")
         test_deepquery_raw_with_pack(user_message_data, pack_id_data)
+        print("\n\n")
 
 
         # Uncomment this to test session deletion
