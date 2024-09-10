@@ -1,4 +1,5 @@
 import os
+import shutil
 from dotenv import load_dotenv
 from openai import OpenAI
 from langchain_community.document_loaders import TextLoader
@@ -7,7 +8,6 @@ from langchain_community.vectorstores import DeepLake
 from custom_embedding import CustomEmbeddingFunction
 import logging
 import hashlib
-import shutil
 
 # Load environment variables
 load_dotenv()
@@ -19,7 +19,7 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 embedding_function = CustomEmbeddingFunction(client)
 
 def project_to_vector(user_folder_path, access_token):
-    """Process files in the user folder, clear existing dataset, and create a user-specific DeepLake dataset."""
+    """Process files in the user folder, ensure proper cleanup, and create a user-specific DeepLake dataset."""
 
     logging.info(f"Starting vectorization for user folder: {user_folder_path}")
     logging.info(f"Access token (hashed): {hashlib.sha256(access_token.encode()).hexdigest()}")
@@ -30,27 +30,34 @@ def project_to_vector(user_folder_path, access_token):
         dataset_path = os.path.join("my_deeplake", hashed_token)
         logging.info(f"Dataset path: {dataset_path}")
 
-        # Ensure the dataset folder exists
-        os.makedirs(dataset_path, exist_ok=True)
-        logging.info(f"Directory {dataset_path} created/exists.")
-        
-        # Initialize DeepLake instance for the specific user and remove existing data
-        logging.info(f"Checking if the dataset needs to be cleared for user: {hashed_token}")
-        
+        # Ensure the dataset folder exists and clear it before use
         if os.path.exists(dataset_path):
-            logging.info(f"Flushing existing dataset at {dataset_path}...")
+            logging.info(f"Existing dataset found at {dataset_path}. Attempting to delete it...")
             try:
-                shutil.rmtree(dataset_path)  # Remove the folder and all its contents
-                os.makedirs(dataset_path, exist_ok=True)  # Recreate an empty dataset directory
-                logging.info(f"Successfully cleared and recreated dataset folder at {dataset_path}.")
+                # Initialize the dataset and attempt to delete
+                db = DeepLake(dataset_path=dataset_path, embedding=embedding_function)
+                db.delete_dataset()  # Try to delete using DeepLake's delete_dataset method
+                logging.info(f"Successfully deleted dataset at {dataset_path}.")
             except Exception as e:
-                logging.error(f"Failed to clear the dataset folder {dataset_path}: {e}")
-                raise Exception(f"Could not clear dataset folder: {e}")
-        
+                logging.error(f"Failed to delete dataset using delete_dataset(). Attempting force delete... Error: {e}")
+                try:
+                    # Force delete in case the regular deletion fails
+                    DeepLake.force_delete_by_path(dataset_path)
+                    logging.info(f"Successfully force-deleted dataset at {dataset_path}.")
+                except Exception as force_error:
+                    logging.error(f"Failed to force delete dataset at {dataset_path}. Error: {force_error}")
+                    raise Exception(f"Could not delete dataset folder: {force_error}")
+        else:
+            logging.info(f"No existing dataset found for {dataset_path}. Creating new dataset folder...")
+
+        # Recreate the empty dataset directory after clearing
+        os.makedirs(dataset_path, exist_ok=True)
+        logging.info(f"Recreated empty dataset folder at {dataset_path}.")
+
         # Initialize DeepLake instance after clearing
         db = DeepLake(dataset_path=dataset_path, embedding=embedding_function, overwrite=True)
         logging.info(f"DeepLake instance initialized for path: {dataset_path}")
-        
+
         # Define allowed file extensions
         allowed_extensions = {
             ".py", ".txt", ".csv", ".json", ".md", ".html", ".xml", ".yaml", ".yml", ".pdf",
@@ -105,7 +112,6 @@ def project_to_vector(user_folder_path, access_token):
     except Exception as e:
         logging.error(f"Error in vectorization process: {str(e)}", exc_info=True)
         raise
-
 
 if __name__ == "__main__":
     # Example test run
