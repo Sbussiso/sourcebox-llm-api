@@ -7,7 +7,6 @@ from langchain_text_splitters import CharacterTextSplitter
 from langchain_community.vectorstores import DeepLake
 from custom_embedding import CustomEmbeddingFunction
 import logging
-import hashlib
 
 # Load environment variables
 load_dotenv()
@@ -23,10 +22,10 @@ def project_to_vector(user_folder_path, user_id, pack_id, pack_type):
     """Process files in the user folder, ensure proper cleanup, and create a user-specific DeepLake dataset."""
 
     logging.info(f"Starting vectorization for user folder: {user_folder_path}")
-    logging.info(f"User ID: {user_id}, Pack ID: {pack_id}")
+    logging.info(f"User ID: {user_id}, Pack ID: {pack_id}, Pack Type: {pack_type}")
 
     try:
-        # Create a unique dataset path using user_id and pack_id
+        # Create a unique dataset path using user_id, pack_id, and pack_type
         dataset_path = os.path.join("my_deeplake", user_id, pack_type, pack_id, "actual_deeplake_name")
         logging.info(f"Dataset path: {dataset_path}")
 
@@ -58,7 +57,6 @@ def project_to_vector(user_folder_path, user_id, pack_id, pack_type):
         db = DeepLake(dataset_path=dataset_path, embedding=embedding_function, overwrite=True)
         logging.info(f"DeepLake instance initialized for path: {dataset_path}")
 
-        
         # Define allowed file extensions
         allowed_extensions = {
             ".py", ".txt", ".csv", ".json", ".md", ".html", ".xml", ".yaml", ".yml", ".pdf",
@@ -107,6 +105,21 @@ def project_to_vector(user_folder_path, user_id, pack_id, pack_type):
             logging.error(f"The following files failed to process: {failed_files}")
         else:
             logging.info("All files processed successfully.")
+
+        # Delete the user's folder after processing the files into DeepLake
+        try:
+            shutil.rmtree(user_folder_path)
+            logging.info(f"Successfully deleted user folder: {user_folder_path}")
+
+            # Delete the user_id folder itself (i.e., the folder in 'uploads/{user_id}')
+            parent_folder = os.path.dirname(user_folder_path)
+            if os.path.exists(parent_folder) and not os.listdir(parent_folder):  # Check if the folder is empty
+                os.rmdir(parent_folder)
+                logging.info(f"Successfully deleted user_id folder: {parent_folder}")
+                
+        except Exception as e:
+            logging.error(f"Failed to delete user folder: {user_folder_path}. Error: {e}")
+            raise Exception(f"Error deleting user folder: {e}")
 
         return db
 
