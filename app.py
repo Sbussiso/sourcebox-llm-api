@@ -281,6 +281,9 @@ class DeepQueryCode(Resource):
 
 
 
+
+
+
 #regular deepquery Resource
 class DeepQuery(Resource):
     def post(self):
@@ -306,7 +309,7 @@ class DeepQuery(Resource):
             auth_base_url = 'https://sourcebox-central-auth-8396932a641c.herokuapp.com'
             get_user_id_url = f'{auth_base_url}/user/id'
             headers = {'Authorization': f'Bearer {access_token}'}
-            
+
             user_id_response = requests.get(get_user_id_url, headers=headers)
             if user_id_response.status_code == 200:
                 user_id = user_id_response.json().get('user_id')
@@ -364,6 +367,7 @@ class DeepQuery(Resource):
         except Exception as e:
             logging.error("Exception occurred: %s", str(e))
             return {"error": str(e)}, 500
+
 
 
 
@@ -449,6 +453,7 @@ class DeepQueryCodeRaw(Resource):
         except Exception as e:
             logging.error("Exception occurred: %s", str(e))
             return {"error": str(e)}, 500
+
 
 
 
