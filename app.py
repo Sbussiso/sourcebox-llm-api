@@ -216,12 +216,25 @@ class DeepQueryCode(Resource):
             # Extract the token by stripping the 'Bearer ' part
             access_token = auth_header.split(' ')[1]
 
-            # Get the user ID from the session (assuming it's stored in session after login)
-            user_id = session.get('user_id')
-            if not user_id:
-                logging.error("User ID not found in session.")
-                return {"error": "User not authenticated"}, 401
+            # Fetch the user ID using the external API with the access token
+            auth_base_url = 'https://sourcebox-central-auth-8396932a641c.herokuapp.com'
+            get_user_id_url = f'{auth_base_url}/user/id'
+            headers = {'Authorization': f'Bearer {access_token}'}
+            
+            user_id_response = requests.get(get_user_id_url, headers=headers)
+            if user_id_response.status_code == 200:
+                user_id = user_id_response.json().get('user_id')
+                if not user_id:
+                    logging.error("User ID not found in the response")
+                    return {"message": "Failed to retrieve user ID"}, 500
+            else:
+                logging.error(f"Failed to retrieve user ID: {user_id_response.text}")
+                return {"error": f"Failed to retrieve user ID: {user_id_response.text}"}, user_id_response.status_code
+
+            # Convert user_id and pack_id to strings to prevent any join() errors
             user_id = str(user_id)
+            if pack_id:
+                pack_id = str(pack_id)
 
             # Set the pack type to "code_pack"
             pack_type = "code_pack"
@@ -236,13 +249,13 @@ class DeepQueryCode(Resource):
             user_folder = get_user_folder(user_id)
 
             # Set the correct dataset path for DeepLake based on user_id, pack_id, and pack_type
-            deeplake_folder_path = os.path.join("my_deeplake", user_id, pack_type, pack_id, "actual_deeplake_name")
+            deeplake_folder_path = os.path.join("my_deeplake", user_id, pack_type, pack_id or "", "actual_deeplake_name")
 
             if os.path.exists(deeplake_folder_path) and os.path.isdir(deeplake_folder_path):
                 logging.info("The my_deeplake folder exists for user folder: %s", user_folder)
             else:
                 logging.info("The my_deeplake folder does not exist. Running project_to_vector.")
-                project_to_vector(user_folder, user_id, pack_id, pack_type)  # Pass the pack_type to project_to_vector
+                project_to_vector(user_folder, user_id, pack_id, pack_type)
 
             # Perform vector query
             logging.info("Performing vector query with user_message: %s", user_message)
@@ -265,6 +278,7 @@ class DeepQueryCode(Resource):
         except Exception as e:
             logging.error("Exception occurred: %s", str(e))
             return {"error": str(e)}, 500
+
 
 
 #regular deepquery Resource
@@ -288,12 +302,25 @@ class DeepQuery(Resource):
             # Extract the token by stripping the 'Bearer ' part
             access_token = auth_header.split(' ')[1]
 
-            # Get the user ID from the session (assuming it's stored in session after login)
-            user_id = session.get('user_id')
-            if not user_id:
-                logging.error("User ID not found in session.")
-                return {"error": "User not authenticated"}, 401
+            # Fetch the user ID using the external API with the access token
+            auth_base_url = 'https://sourcebox-central-auth-8396932a641c.herokuapp.com'
+            get_user_id_url = f'{auth_base_url}/user/id'
+            headers = {'Authorization': f'Bearer {access_token}'}
+            
+            user_id_response = requests.get(get_user_id_url, headers=headers)
+            if user_id_response.status_code == 200:
+                user_id = user_id_response.json().get('user_id')
+                if not user_id:
+                    logging.error("User ID not found in the response")
+                    return {"message": "Failed to retrieve user ID"}, 500
+            else:
+                logging.error(f"Failed to retrieve user ID: {user_id_response.text}")
+                return {"error": f"Failed to retrieve user ID: {user_id_response.text}"}, user_id_response.status_code
+
+            # Ensure user_id and pack_id are strings
             user_id = str(user_id)
+            if pack_id:
+                pack_id = str(pack_id)
 
             # Set the pack type to "pack"
             pack_type = "pack"
@@ -308,13 +335,13 @@ class DeepQuery(Resource):
             user_folder = get_user_folder(user_id)
 
             # Set the correct dataset path for DeepLake based on user_id, pack_id, and pack_type
-            deeplake_folder_path = os.path.join("my_deeplake", user_id, pack_type, pack_id, "actual_deeplake_name")
+            deeplake_folder_path = os.path.join("my_deeplake", user_id, pack_type, pack_id or "", "actual_deeplake_name")
 
             if os.path.exists(deeplake_folder_path) and os.path.isdir(deeplake_folder_path):
                 logging.info("The my_deeplake folder exists for user folder: %s", user_folder)
             else:
                 logging.info("The my_deeplake folder does not exist. Running project_to_vector.")
-                project_to_vector(user_folder, user_id, pack_id, pack_type)  # Pass the pack_type to project_to_vector
+                project_to_vector(user_folder, user_id, pack_id, pack_type)
 
             # Perform vector query
             logging.info("Performing vector query with user_message: %s", user_message)
@@ -339,6 +366,8 @@ class DeepQuery(Resource):
             return {"error": str(e)}, 500
 
 
+
+
 #raw deepquery code resource
 class DeepQueryCodeRaw(Resource):
     def post(self):
@@ -359,12 +388,25 @@ class DeepQueryCodeRaw(Resource):
             # Extract the token by stripping the 'Bearer ' part
             access_token = auth_header.split(' ')[1]
 
-            # Get the user ID from the session (assuming it's stored in session after login)
-            user_id = session.get('user_id')
-            if not user_id:
-                logging.error("User ID not found in session.")
-                return {"error": "User not authenticated"}, 401
+            # Fetch the user ID using the external API with the access token
+            auth_base_url = 'https://sourcebox-central-auth-8396932a641c.herokuapp.com'
+            get_user_id_url = f'{auth_base_url}/user/id'
+            headers = {'Authorization': f'Bearer {access_token}'}
+            
+            user_id_response = requests.get(get_user_id_url, headers=headers)
+            if user_id_response.status_code == 200:
+                user_id = user_id_response.json().get('user_id')
+                if not user_id:
+                    logging.error("User ID not found in the response")
+                    return {"message": "Failed to retrieve user ID"}, 500
+            else:
+                logging.error(f"Failed to retrieve user ID: {user_id_response.text}")
+                return {"error": f"Failed to retrieve user ID: {user_id_response.text}"}, user_id_response.status_code
+
+            # Ensure user_id and pack_id are strings
             user_id = str(user_id)
+            if pack_id:
+                pack_id = str(pack_id)
 
             # Set the pack type to "code_pack" for code-specific packs
             pack_type = "code_pack"
@@ -379,7 +421,7 @@ class DeepQueryCodeRaw(Resource):
             user_folder = get_user_folder(user_id)
 
             # Set the correct dataset path for DeepLake based on user_id, pack_id, and pack_type
-            deeplake_folder_path = os.path.join("my_deeplake", user_id, pack_type, pack_id, "actual_deeplake_name")
+            deeplake_folder_path = os.path.join("my_deeplake", user_id, pack_type, pack_id or "", "actual_deeplake_name")
 
             if os.path.exists(deeplake_folder_path) and os.path.isdir(deeplake_folder_path):
                 logging.info("The my_deeplake folder exists for user folder: %s", user_folder)
@@ -407,6 +449,8 @@ class DeepQueryCodeRaw(Resource):
         except Exception as e:
             logging.error("Exception occurred: %s", str(e))
             return {"error": str(e)}, 500
+
+
 
 #raw deepquery resource
 class DeepQueryRaw(Resource):
@@ -428,40 +472,53 @@ class DeepQueryRaw(Resource):
             # Extract the token by stripping the 'Bearer ' part
             access_token = auth_header.split(' ')[1]
 
-            # Get the user ID from the session (assuming it's stored in session after login)
-            user_id = session.get('user_id')
-            if not user_id:
-                logging.error("User ID not found in session.")
-                return {"error": "User not authenticated"}, 401
-            user_id = str(user_id)
+            # Fetch the user ID using the external API with the access token
+            auth_base_url = 'https://sourcebox-central-auth-8396932a641c.herokuapp.com'
+            get_user_id_url = f'{auth_base_url}/user/id'
+            headers = {'Authorization': f'Bearer {access_token}'}
+            
+            user_id_response = requests.get(get_user_id_url, headers=headers)
+            if user_id_response.status_code == 200:
+                user_id = user_id_response.json().get('user_id')
+                if not user_id:
+                    logging.error("User ID not found in the response")
+                    return {"message": "Failed to retrieve user ID"}, 500
+            else:
+                logging.error(f"Failed to retrieve user ID: {user_id_response.text}")
+                return {"error": f"Failed to retrieve user ID: {user_id_response.text}"}, user_id_response.status_code
 
-            # Set the pack type to "pack" for regular packs
+            # Ensure user_id and pack_id are strings
+            user_id = str(user_id)
+            if pack_id:
+                pack_id = str(pack_id)
+
+            # Set the pack type to "pack"
             pack_type = "pack"
             
             # Process the pack if a pack_id is provided
             if pack_id:
                 logging.info("Processing pack with pack_id: %s", pack_id)
                 route = 'pack/details'
-                upload_and_process_pack(user_id, pack_id, route, pack_type)  # Pass user_id, pack_id, and pack_type
-                
+                upload_and_process_pack(user_id, pack_id, route, pack_type)
+
             # Get the user-specific folder for vector querying
             user_folder = get_user_folder(user_id)
 
             # Set the correct dataset path for DeepLake based on user_id, pack_id, and pack_type
-            deeplake_folder_path = os.path.join("my_deeplake", user_id, pack_type, pack_id, "actual_deeplake_name")
+            deeplake_folder_path = os.path.join("my_deeplake", user_id, pack_type, pack_id or "", "actual_deeplake_name")
 
             if os.path.exists(deeplake_folder_path) and os.path.isdir(deeplake_folder_path):
                 logging.info("The my_deeplake folder exists for user folder: %s", user_folder)
             else:
                 logging.info("The my_deeplake folder does not exist. Running project_to_vector.")
-                project_to_vector(user_folder, user_id, pack_id, pack_type)  # Pass the pack_type to project_to_vector
+                project_to_vector(user_folder, user_id, pack_id, pack_type)
 
             # Perform vector query
             logging.info("Performing vector query with user_message: %s", user_message)
             embedding_function = CustomEmbeddingFunction(client)
             db = DeepLake(dataset_path=deeplake_folder_path, embedding=embedding_function, read_only=True)
             vector_results = perform_query(db, user_message)
-            
+
             # Check if results are empty
             if not vector_results:
                 logging.info("No vector results found.")
@@ -476,6 +533,8 @@ class DeepQueryRaw(Resource):
         except Exception as e:
             logging.error("Exception occurred: %s", str(e))
             return {"error": str(e)}, 500
+
+
 
 
 # Login Resource
@@ -554,6 +613,9 @@ class DeleteSession(Resource):
         else:
             logging.info("No upload files found for this user with user_id: %s", user_id)
 
+        #convert to strings
+        user_id = str(user_id)
+        
         # Path to the user's DeepLake folder (all packs associated with this user)
         deeplake_user_folder = os.path.join("my_deeplake", user_id)
 
