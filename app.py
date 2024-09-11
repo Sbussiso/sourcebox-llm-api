@@ -87,9 +87,9 @@ def sanitize_filename(url):
     return filename
 
 
-def upload_and_process_pack(user_id, pack_id, route, pack_type):
+def upload_and_process_pack(user_id, pack_id, route, pack_type, access_token):
     """
-    This function uploads and processes a given pack for a user, identified by their user_id and pack_id. 
+    This function uploads and processes a given pack for a user, identified by their user_id and pack_id.
     The `pack_type` distinguishes between different types of packs (e.g., 'pack' or 'code_pack').
     """
     logger = logging.getLogger(__name__)
@@ -100,12 +100,6 @@ def upload_and_process_pack(user_id, pack_id, route, pack_type):
     # Define the base URL of the external API and the specific endpoint to retrieve the pack details
     auth_base_url = 'https://sourcebox-central-auth-8396932a641c.herokuapp.com'
     get_pack_url = f'{auth_base_url}/packman/{route}/{pack_id}'
-
-    # Retrieve the access token from the session to authenticate the API request
-    access_token = session.get('access_token')
-    if not access_token:
-        logger.error("Access token not found in session. User not authenticated.")
-        raise ValueError("User not authenticated")
 
     # Set the Authorization header with the Bearer token for the API request
     headers = {'Authorization': f'Bearer {access_token}'}
@@ -243,7 +237,7 @@ class DeepQueryCode(Resource):
             if pack_id:
                 logging.info("Processing code pack with pack_id: %s", pack_id)
                 route = 'code/details'
-                upload_and_process_pack(user_id, pack_id, route, pack_type)  # Pass user_id, pack_id, route, and pack_type
+                upload_and_process_pack(user_id, pack_id, route, pack_type, access_token)  # Pass user_id, pack_id, route, and pack_type
 
             # Get the user-specific folder for vector querying
             user_folder = get_user_folder(user_id)
@@ -332,7 +326,7 @@ class DeepQuery(Resource):
             if pack_id:
                 logging.info("Processing regular pack with pack_id: %s", pack_id)
                 route = 'pack/details'
-                upload_and_process_pack(user_id, pack_id, route, pack_type)  # Pass user_id, pack_id, route, and pack_type
+                upload_and_process_pack(user_id, pack_id, route, pack_type, access_token)  # Pass user_id, pack_id, route, and pack_type
 
             # Get the user-specific folder for vector querying
             user_folder = get_user_folder(user_id)
@@ -419,7 +413,7 @@ class DeepQueryCodeRaw(Resource):
             if pack_id:
                 logging.info("Processing code pack with pack_id: %s", pack_id)
                 route = 'code/details'
-                upload_and_process_pack(user_id, pack_id, route, pack_type)  # Pass user_id, pack_id, route, and pack_type
+                upload_and_process_pack(user_id, pack_id, route, pack_type, access_token)  # Pass user_id, pack_id, route, and pack_type
                 
             # Get the user-specific folder for vector querying
             user_folder = get_user_folder(user_id)
@@ -504,7 +498,7 @@ class DeepQueryRaw(Resource):
             if pack_id:
                 logging.info("Processing pack with pack_id: %s", pack_id)
                 route = 'pack/details'
-                upload_and_process_pack(user_id, pack_id, route, pack_type)
+                upload_and_process_pack(user_id, pack_id, route, pack_type, access_token)
 
             # Get the user-specific folder for vector querying
             user_folder = get_user_folder(user_id)
@@ -558,7 +552,7 @@ class Login(Resource):
 
             auth_base_url = 'https://sourcebox-central-auth-8396932a641c.herokuapp.com'
             login_url = f'{auth_base_url}/login'
-            get_user_id_url = f'{auth_base_url}/user/id'  # New endpoint to get user ID
+            get_user_id_url = f'{auth_base_url}/user/id'
             payload = {'email': email, 'password': password}
 
             # Authenticate and retrieve access token
@@ -569,9 +563,7 @@ class Login(Resource):
                     logger.error("Access token not found in the response")
                     return {"message": "Failed to retrieve access token"}, 500
 
-                session['access_token'] = access_token
-
-                # Now fetch the user ID using the access token
+                # Fetch the user ID using the access token
                 headers = {'Authorization': f'Bearer {access_token}'}
                 user_id_response = requests.get(get_user_id_url, headers=headers)
 
@@ -581,15 +573,11 @@ class Login(Resource):
                         logger.error("User ID not found in the response")
                         return {"message": "Failed to retrieve user ID"}, 500
 
-                    # Store the user_id in the session
-                    session['user_id'] = user_id
-
                     logger.info(f"User {email} logged in successfully with user ID {user_id}")
                     return {"access_token": access_token, "user_id": user_id}, 200
                 else:
                     logger.error(f"Failed to retrieve user ID: {user_id_response.text}")
                     return {"error": f"Failed to retrieve user ID: {user_id_response.text}"}, user_id_response.status_code
-
             else:
                 logger.error(f"Login failed: {response.text}")
                 return {"error": f"Login failed: {response.text}"}, response.status_code
@@ -599,43 +587,45 @@ class Login(Resource):
             return {"error": "Something went wrong"}, 500
 
 
-
 # Delete Session Resource
 class DeleteSession(Resource):
     def delete(self):
-        # Check if 'user_id' exists in session instead of 'access_token'
-        if 'user_id' not in session:
-            return {"message": "No session started"}, 400
+        logger = logging.getLogger(__name__)
+        try:
+            # Extract user_id from request data
+            data = request.get_json()
+            user_id = data.get('user_id')
+            if not user_id:
+                return {"message": "user_id is required"}, 400
 
-        # Retrieve the user's folder using the user_id from the session
-        user_id = session['user_id']
-        user_folder = get_user_folder(user_id)
-        
-        # Delete user's upload folder
-        if os.path.exists(user_folder):
-            shutil.rmtree(user_folder)
-            logging.info("User's upload folder deleted successfully for user: %s", user_id)
-        else:
-            logging.info("No upload files found for this user with user_id: %s", user_id)
+            logger.info(f"Deleting session and associated files for user: {user_id}")
+            
+            # Retrieve the user's folder using the user_id
+            user_folder = get_user_folder(user_id)
+            
+            # Delete user's upload folder
+            if os.path.exists(user_folder):
+                shutil.rmtree(user_folder)
+                logger.info("User's upload folder deleted successfully for user: %s", user_id)
+            else:
+                logger.info("No upload files found for this user with user_id: %s", user_id)
 
-        #convert to strings
-        user_id = str(user_id)
-        
-        # Path to the user's DeepLake folder (all packs associated with this user)
-        deeplake_user_folder = os.path.join("my_deeplake", user_id)
+            # Path to the user's DeepLake folder (all packs associated with this user)
+            deeplake_user_folder = os.path.join("my_deeplake", user_id)
 
-        # Delete the user's DeepLake folder and its contents
-        if os.path.exists(deeplake_user_folder):
-            shutil.rmtree(deeplake_user_folder)
-            logging.info("User's DeepLake folder deleted successfully for user: %s", user_id)
-        else:
-            logging.info("No DeepLake files found for this user with user_id: %s", user_id)
+            # Delete the user's DeepLake folder and its contents
+            if os.path.exists(deeplake_user_folder):
+                shutil.rmtree(deeplake_user_folder)
+                logger.info("User's DeepLake folder deleted successfully for user: %s", user_id)
+            else:
+                logger.info("No DeepLake files found for this user with user_id: %s", user_id)
 
-        # Remove 'user_id' from the session to log the user out
-        session.pop('user_id', None)
+            logger.info("Session and all associated files deleted successfully for user: %s", user_id)
+            return {"message": "Session and all associated files deleted successfully"}, 200
+        except Exception as e:
+            logger.error(f"Unexpected error during session deletion: {str(e)}", exc_info=True)
+            return {"error": "Something went wrong"}, 500
 
-        logging.info("Session and all associated files deleted successfully for user: %s", user_id)
-        return {"message": "Session and all associated files deleted successfully"}, 200
 
 
 # Flask-RESTful Resource Routing
