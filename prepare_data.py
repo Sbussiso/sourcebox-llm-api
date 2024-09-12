@@ -37,3 +37,12 @@ def prepare_csv_for_embedding(file_path):
 
     # Step 4: Convert each row of the DataFrame into a single string for embedding
     return df.astype(str).agg(' '.join, axis=1).tolist()
+
+
+
+if __name__ == "__main__":
+    import os
+    cwd = os.getcwd()
+    file_path = os.path.join(cwd, 'test', 'WorldPopulation2023.csv')
+    cleaned_data = prepare_csv_for_embedding(file_path)
+    print(cleaned_data)
