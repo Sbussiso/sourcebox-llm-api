@@ -6,6 +6,8 @@ from langchain_community.document_loaders import TextLoader
 from langchain_text_splitters import CharacterTextSplitter
 from langchain_community.vectorstores import DeepLake
 from custom_embedding import CustomEmbeddingFunction
+from prepare_data import prepare_csv_for_embedding
+from langchain.docstore.document import Document  # Import Document class from LangChain
 import logging
 
 # Load environment variables
@@ -16,7 +18,6 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # Initialize the embedding function
 embedding_function = CustomEmbeddingFunction(client)
-
 
 def project_to_vector(user_folder_path, user_id, pack_id, pack_type):
     """Process files in the user folder, ensure proper cleanup, and create a user-specific DeepLake dataset."""
@@ -29,32 +30,9 @@ def project_to_vector(user_folder_path, user_id, pack_id, pack_type):
         dataset_path = os.path.join("my_deeplake", user_id, pack_type, pack_id, "actual_deeplake_name")
         logging.info(f"Dataset path: {dataset_path}")
 
-        # Ensure the dataset folder exists and clear it before use
-        if os.path.exists(dataset_path):
-            logging.info(f"Existing dataset found at {dataset_path}. Attempting to delete it...")
-            try:
-                # Initialize the dataset and attempt to delete
-                db = DeepLake(dataset_path=dataset_path, embedding=embedding_function)
-                db.delete_dataset()  # Try to delete using DeepLake's delete_dataset method
-                logging.info(f"Successfully deleted dataset at {dataset_path}.")
-            except Exception as e:
-                logging.error(f"Failed to delete dataset using delete_dataset(). Attempting force delete... Error: {e}")
-                try:
-                    # Force delete in case the regular deletion fails
-                    DeepLake.force_delete_by_path(dataset_path)
-                    logging.info(f"Successfully force-deleted dataset at {dataset_path}.")
-                except Exception as force_error:
-                    logging.error(f"Failed to force delete dataset at {dataset_path}. Error: {force_error}")
-                    raise Exception(f"Could not delete dataset folder: {force_error}")
-        else:
-            logging.info(f"No existing dataset found for {dataset_path}. Creating new dataset folder...")
-
-        # Recreate the empty dataset directory after clearing
-        os.makedirs(dataset_path, exist_ok=True)
-        logging.info(f"Recreated empty dataset folder at {dataset_path}.")
-
-        # Initialize DeepLake instance after clearing
+        # Initialize the dataset and embedding function
         db = DeepLake(dataset_path=dataset_path, embedding=embedding_function, overwrite=True)
+
         logging.info(f"DeepLake instance initialized for path: {dataset_path}")
 
         # Define allowed file extensions
@@ -80,26 +58,45 @@ def project_to_vector(user_folder_path, user_id, pack_id, pack_type):
                     continue
 
                 if os.path.isfile(file_path):
-                    try:
-                        loader = TextLoader(file_path)
-                        documents = loader.load()
+                    if file_extension == ".csv":
+                        # Use the prepare_csv_for_embedding function for CSV files
+                        try:
+                            logging.info(f"Processing CSV file: {filename}")
+                            # Preprocess CSV for embedding
+                            prepared_csv_data = prepare_csv_for_embedding(file_path)
 
-                        # Split the document respecting OpenAI's token limits
-                        max_chunk_size = 2000  # Keep chunks within token limit with some buffer
-                        text_splitter = CharacterTextSplitter(chunk_size=max_chunk_size, chunk_overlap=100)
-                        docs = text_splitter.split_documents(documents)
-                        logging.info(f"Successfully split document: {filename} into {len(docs)} chunks.")
-                    except Exception as e:
-                        failed_files.append(file_path)
-                        logging.error(f"Failed to load or split file: {filename}, Error: {e}")
-                        continue
+                            # Convert each row to a LangChain Document and embed it
+                            docs = []
+                            for row in prepared_csv_data:
+                                doc = Document(page_content=row, metadata={'source': filename})
+                                docs.append(doc)
 
-                    try:
-                        db.add_documents(docs)  # Add documents to the user's specific DeepLake dataset
-                        logging.info(f"Successfully added documents from file: {filename}")
-                    except Exception as e:
-                        failed_files.append(file_path)
-                        logging.error(f"Failed to add documents from file: {filename}, Error: {e}")
+                            # Add documents to DeepLake
+                            db.add_documents(docs)
+
+                        except Exception as e:
+                            failed_files.append(file_path)
+                            logging.error(f"Failed to process CSV file: {filename}, Error: {e}")
+                            continue
+                    else:
+                        try:
+                            # Handle non-CSV files with TextLoader
+                            loader = TextLoader(file_path)
+                            documents = loader.load()
+
+                            # Split the document respecting OpenAI's token limits
+                            max_chunk_size = 2000  # Keep chunks within token limit with some buffer
+                            text_splitter = CharacterTextSplitter(chunk_size=max_chunk_size, chunk_overlap=100)
+                            docs = text_splitter.split_documents(documents)
+                            logging.info(f"Successfully split document: {filename} into {len(docs)} chunks.")
+                            
+                            # Add documents to DeepLake
+                            db.add_documents(docs)
+
+                        except Exception as e:
+                            failed_files.append(file_path)
+                            logging.error(f"Failed to load or split file: {filename}, Error: {e}")
+                            continue
 
         if failed_files:
             logging.error(f"The following files failed to process: {failed_files}")
