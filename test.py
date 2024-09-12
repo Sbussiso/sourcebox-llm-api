@@ -229,17 +229,17 @@ if __name__ == '__main__':
 
     if access_token:
         # Separate inputs for deepquery-code tests
-        user_message_code = input("Enter user message for deepquery-code: ")
-        pack_id_code = input("Enter pack ID for deepquery-code: ")
+        # user_message_code = input("Enter user message for deepquery-code: ")
+        # pack_id_code = input("Enter pack ID for deepquery-code: ")
 
         # deepquery-code tests
-        print("\nTesting /deepquery-code-raw with user_message only...")
-        test_deepquery_code_raw_message(user_message_code, pack_id_code)
-        print("\n\n")
+        # print("\nTesting /deepquery-code-raw with user_message only...")
+        # test_deepquery_code_raw_message(user_message_code, pack_id_code)
+        # print("\n\n")
 
-        print("\nTesting /deepquery-code-raw with pack data...")
-        test_deepquery_code_raw_with_pack(user_message_code, pack_id_code)
-        print("\n\n\n")
+        # print("\nTesting /deepquery-code-raw with pack data...")
+        # test_deepquery_code_raw_with_pack(user_message_code, pack_id_code)
+        # print("\n\n\n")
 
 
         # Separate inputs for deepquery tests

@@ -1,17 +1,16 @@
 import pandas as pd
-from sklearn.preprocessing import LabelEncoder
 from sklearn.impute import SimpleImputer
 
 def prepare_csv_for_embedding(file_path):
     """
     Cleans and prepares a CSV file for embedding by handling missing values,
-    encoding categorical columns, and preparing text data for embedding.
-
+    and retains text columns like country names without encoding them.
+    
     Args:
     file_path (str): Path to the CSV file.
 
     Returns:
-    List[str]: List of cleaned CSV rows as strings, ready for embedding.
+    List[str]: List of cleaned CSV rows as strings, with headers and their values concatenated.
     """
     
     # Step 1: Load CSV file
@@ -23,21 +22,19 @@ def prepare_csv_for_embedding(file_path):
     imputer_num = SimpleImputer(strategy='median')
     df[numerical_cols] = imputer_num.fit_transform(df[numerical_cols])
 
-    # For categorical columns, fill missing values with the most frequent value
+    # For categorical columns (e.g., 'Country'), fill missing values with the most frequent value
+    # We treat any non-numerical columns as text and retain them without encoding
     categorical_cols = df.select_dtypes(include=['object']).columns
     imputer_cat = SimpleImputer(strategy='most_frequent')
     df[categorical_cols] = imputer_cat.fit_transform(df[categorical_cols])
 
-    # Step 3: Encode categorical columns
-    label_encoders = {}
-    for col in categorical_cols:
-        le = LabelEncoder()
-        df[col] = le.fit_transform(df[col])
-        label_encoders[col] = le  # Save the encoder for potential reverse mapping
+    # Step 3: Concatenate headers and values for each row into a single string for embedding
+    rows_as_text = []
+    for _, row in df.iterrows():
+        row_str = " ".join([f"{col}: {val}" for col, val in row.items()])
+        rows_as_text.append(row_str)
 
-    # Step 4: Convert each row of the DataFrame into a single string for embedding
-    return df.astype(str).agg(' '.join, axis=1).tolist()
-
+    return rows_as_text
 
 
 if __name__ == "__main__":
