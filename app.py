@@ -168,7 +168,7 @@ def upload_and_process_pack(user_id, pack_id, route, pack_type, access_token):
     # Process the uploaded files and save embeddings using the project_to_vector function
     try:
         # Pass the user folder path, user ID, pack ID, and pack type to the vectorization function
-        project_to_vector(user_folder, user_id, pack_id, pack_type)
+        project_to_vector(user_folder, user_id, pack_id, pack_type, access_token)
         logger.info("Processed %s and saved embeddings for user folder: %s", pack_type, user_folder)
     except Exception as e:
         logger.error("Error processing files for user folder %s: %s", user_folder, str(e))
@@ -293,7 +293,7 @@ class DeepQueryCode(Resource):
                 logging.info("The my_deeplake folder exists for user folder: %s", user_folder)
             else:
                 logging.info("The my_deeplake folder does not exist. Running project_to_vector.")
-                project_to_vector(user_folder, user_id, pack_id, pack_type)
+                project_to_vector(user_folder, user_id, pack_id, pack_type, access_token)
 
             # Perform vector query
             logging.info("Performing vector query with user_message: %s", user_message)
@@ -382,7 +382,7 @@ class DeepQuery(Resource):
                 logging.info("The my_deeplake folder exists for user folder: %s", user_folder)
             else:
                 logging.info("The my_deeplake folder does not exist. Running project_to_vector.")
-                project_to_vector(user_folder, user_id, pack_id, pack_type)
+                project_to_vector(user_folder, user_id, pack_id, pack_type, access_token)
 
             # Perform vector query
             logging.info("Performing vector query with user_message: %s", user_message)
@@ -469,7 +469,7 @@ class DeepQueryCodeRaw(Resource):
                 logging.info("The my_deeplake folder exists for user folder: %s", user_folder)
             else:
                 logging.info("The my_deeplake folder does not exist. Running project_to_vector.")
-                project_to_vector(user_folder, user_id, pack_id, pack_type)  # Pass the pack_type to project_to_vector
+                project_to_vector(user_folder, user_id, pack_id, pack_type, access_token)  # Pass the pack_type to project_to_vector
 
             # Perform vector query
             logging.info("Performing vector query with user_message: %s", user_message)
@@ -554,7 +554,7 @@ class DeepQueryRaw(Resource):
                 logging.info("The my_deeplake folder exists for user folder: %s", user_folder)
             else:
                 logging.info("The my_deeplake folder does not exist. Running project_to_vector.")
-                project_to_vector(user_folder, user_id, pack_id, pack_type)
+                project_to_vector(user_folder, user_id, pack_id, pack_type, access_token)
 
             # Perform vector query
             logging.info("Performing vector query with user_message: %s", user_message)
