@@ -95,6 +95,10 @@ def upload_and_process_pack(user_id, pack_id, route, pack_type, access_token):
     """
     logger = logging.getLogger(__name__)
 
+    if not pack_id:
+        logger.error("No pack_id provided, skipping pack processing.")
+        return
+
     # Log the initiation of the upload and processing action
     logger.info("Uploading and processing %s with pack_id: %s for user_id: %s", pack_type, pack_id, user_id)
 
@@ -167,7 +171,7 @@ def upload_and_process_pack(user_id, pack_id, route, pack_type, access_token):
 
     # Process the uploaded files and save embeddings using the project_to_vector function
     try:
-        # Pass the user folder path, user ID, pack ID, and pack type to the vectorization function
+        logger.info("Running project_to_vector for user folder: %s", user_folder)
         project_to_vector(user_folder, user_id, pack_id, pack_type, access_token)
         logger.info("Processed %s and saved embeddings for user folder: %s", pack_type, user_folder)
     except Exception as e:
@@ -177,7 +181,7 @@ def upload_and_process_pack(user_id, pack_id, route, pack_type, access_token):
     # Return a success message along with the path to the user folder
     return {"message": f"{pack_type} uploaded and processed successfully", "folder": user_folder}
 
-
+# token count
 def token_count(access_token, prompt, history=None, vector_results=None, response=None):
     encoding = tiktoken.get_encoding("cl100k_base")  # Assuming GPT-4 encoding, adapt as necessary
 
@@ -215,22 +219,37 @@ def token_count(access_token, prompt, history=None, vector_results=None, respons
     return total_tokens
 
 
+
 # ChatGPT Response Function
 def chatgpt_response(access_token, prompt, history=None, vector_results=None):
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "You are a helpful code comprehension assistant. Analyze and respond based on the given context."},
-            {"role": "user", "content": f"USER PROMPT: {prompt}\nVECTOR SEARCH RESULTS: {vector_results}\nCONVERSATION HISTORY: {history}"}
-        ]
-    )
-    
-    response_content = response.choices[0].message.content
+    try:
+        # Ensure that history and vector_results are strings
+        if not isinstance(history, str):
+            history = str(history)
+        
+        if not isinstance(vector_results, str):
+            vector_results = str(vector_results)
 
-    # Calculate and print token usage
-    token_count(access_token, prompt, history, vector_results, response_content)
+        # Call GPT API with formatted history and vector results
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a helpful code comprehension assistant. Analyze and respond based on the given context."},
+                {"role": "user", "content": f"USER PROMPT: {prompt}\nVECTOR SEARCH RESULTS: {vector_results}\nCONVERSATION HISTORY: {history}"}
+            ]
+        )
 
-    return response_content
+        response_content = response.choices[0].message.content
+
+        # Calculate and print token usage (assuming token_count is another function)
+        token_count(access_token, prompt, history, vector_results, response_content)
+
+        return response_content
+
+    except Exception as e:
+        logging.error(f"Error generating GPT response: {e}")
+        return f"Error: {e}"
+
 
 
 # DeepQueryCode Resource
@@ -245,6 +264,11 @@ class DeepQueryCode(Resource):
 
             logging.info("Received POST request with user_message: %s, pack_id: %s", user_message, pack_id)
 
+            # Validate user_message input
+            if not isinstance(user_message, str) or not user_message:
+                logging.error("Invalid user_message provided: %s", user_message)
+                return {"error": "Invalid user_message provided"}, 400
+
             # Extract access token from the request headers
             auth_header = request.headers.get('Authorization')
             if not auth_header or not auth_header.startswith('Bearer '):
@@ -254,57 +278,90 @@ class DeepQueryCode(Resource):
             # Extract the token by stripping the 'Bearer ' part
             access_token = auth_header.split(' ')[1]
 
-            # Fetch the user ID using the external API with the access token
-            auth_base_url = 'https://sourcebox-central-auth-8396932a641c.herokuapp.com'
-            get_user_id_url = f'{auth_base_url}/user/id'
-            headers = {'Authorization': f'Bearer {access_token}'}
-            
-            user_id_response = requests.get(get_user_id_url, headers=headers)
-            if user_id_response.status_code == 200:
+            try:
+                # Fetch the user ID using the external API with the access token
+                auth_base_url = 'https://sourcebox-central-auth-8396932a641c.herokuapp.com'
+                get_user_id_url = f'{auth_base_url}/user/id'
+                headers = {'Authorization': f'Bearer {access_token}'}
+                user_id_response = requests.get(get_user_id_url, headers=headers)
+                user_id_response.raise_for_status()  # Raise an exception for bad HTTP responses
+
                 user_id = user_id_response.json().get('user_id')
                 if not user_id:
                     logging.error("User ID not found in the response")
-                    return {"message": "Failed to retrieve user ID"}, 500
-            else:
-                logging.error(f"Failed to retrieve user ID: {user_id_response.text}")
-                return {"error": f"Failed to retrieve user ID: {user_id_response.text}"}, user_id_response.status_code
+                    return {"error": "Failed to retrieve user ID"}, 500
+            except requests.exceptions.RequestException as e:
+                logging.error(f"Failed to retrieve user ID: {str(e)}")
+                return {"error": f"Failed to retrieve user ID: {str(e)}"}, 500
 
-            # Convert user_id and pack_id to strings to prevent any join() errors
-            user_id = str(user_id)
-            if pack_id:
-                pack_id = str(pack_id)
+            # Ensure user_id and pack_id are strings to prevent errors during file path generation
+            try:
+                user_id = str(user_id)
+                if pack_id:
+                    pack_id = str(pack_id)
+            except Exception as e:
+                logging.error(f"Error converting user_id/pack_id to string: {str(e)}")
+                return {"error": "Error processing user_id or pack_id"}, 500
 
             # Set the pack type to "code_pack"
             pack_type = "code_pack"
 
             # Process the pack if a pack_id is provided
             if pack_id:
-                logging.info("Processing code pack with pack_id: %s", pack_id)
-                route = 'code/details'
-                upload_and_process_pack(user_id, pack_id, route, pack_type, access_token)  # Pass user_id, pack_id, route, and pack_type
+                try:
+                    logging.info("Processing code pack with pack_id: %s", pack_id)
+                    route = 'code/details'
+                    upload_and_process_pack(user_id, pack_id, route, pack_type, access_token)
+                except Exception as e:
+                    logging.error(f"Error processing pack: {str(e)}")
+                    return {"error": "Error processing pack"}, 500
 
-            # Get the user-specific folder for vector querying
-            user_folder = get_user_folder(user_id)
+                # Get the user-specific folder for vector querying
+                try:
+                    user_folder = get_user_folder(user_id)
+                except Exception as e:
+                    logging.error(f"Error retrieving user folder: {str(e)}")
+                    return {"error": "Error retrieving user folder"}, 500
 
-            # Set the correct dataset path for DeepLake based on user_id, pack_id, and pack_type
-            deeplake_folder_path = os.path.join("my_deeplake", user_id, pack_type, pack_id or "", "actual_deeplake_name")
+                # Set the correct dataset path for DeepLake based on user_id, pack_id, and pack_type
+                try:
+                    deeplake_folder_path = os.path.join("my_deeplake", user_id, pack_type, pack_id or "", "actual_deeplake_name")
 
-            if os.path.exists(deeplake_folder_path) and os.path.isdir(deeplake_folder_path):
-                logging.info("The my_deeplake folder exists for user folder: %s", user_folder)
+                    if os.path.exists(deeplake_folder_path) and os.path.isdir(deeplake_folder_path):
+                        logging.info("The my_deeplake folder exists for user folder: %s", user_folder)
+                    else:
+                        logging.info("The my_deeplake folder does not exist. Running project_to_vector.")
+                        project_to_vector(user_folder, user_id, pack_id, pack_type, access_token)
+                except Exception as e:
+                    logging.error(f"Error setting or accessing dataset path: {str(e)}")
+                    return {"error": "Error processing dataset path"}, 500
+
+                # Perform vector query
+                try:
+                    logging.info("Performing vector query with user_message: %s", user_message)
+                    embedding_function = CustomEmbeddingFunction(client)
+                    db = DeepLake(dataset_path=deeplake_folder_path, embedding=embedding_function, read_only=True)
+                    vector_results = perform_query(db, user_message)
+                    logging.info("Vector query results: %s", vector_results)
+                except Exception as e:
+                    logging.error(f"Error performing vector query: {str(e)}")
+                    return {"error": "Error during vector query"}, 500
+
+                # Generate a response using GPT, integrating history and vector results
+                try:
+                    logging.info("Generating response using GPT with history: %s and vector_results: %s", history, vector_results)
+                    assistant_message = chatgpt_response(access_token, user_message, history=history, vector_results=vector_results)
+                except Exception as e:
+                    logging.error(f"Error generating GPT response: {str(e)}")
+                    return {"error": "Error generating GPT response"}, 500
             else:
-                logging.info("The my_deeplake folder does not exist. Running project_to_vector.")
-                project_to_vector(user_folder, user_id, pack_id, pack_type, access_token)
-
-            # Perform vector query
-            logging.info("Performing vector query with user_message: %s", user_message)
-            embedding_function = CustomEmbeddingFunction(client)
-            db = DeepLake(dataset_path=deeplake_folder_path, embedding=embedding_function, read_only=True)
-            vector_results = perform_query(db, user_message)
-            logging.info("Vector query results: %s", vector_results)
-
-            # Generate a response using GPT, integrating history and vector results
-            logging.info("Generating response using GPT with history: %s and vector_results: %s", history, vector_results)
-            assistant_message = chatgpt_response(access_token, user_message, history=history, vector_results=vector_results)
+                try:
+                    # No pack_id provided, perform non-vector GPT response
+                    logging.info("No pack id provided. Performing non-vector GPT response.")
+                    assistant_message = chatgpt_response(access_token, user_message, history=history)
+                except Exception as e:
+                    logging.error(f"Error generating non-vector GPT response: {str(e)}")
+                    return {"error": "Error generating non-vector GPT response"}, 500
 
             logging.info("Response generated successfully: %s", assistant_message)
 
@@ -321,79 +378,139 @@ class DeepQueryCode(Resource):
 
 
 
-
-#regular deepquery Resource
 class DeepQuery(Resource):
     def post(self):
         try:
             # Extract data from the request
-            data = request.json
-            user_message = data.get('user_message')
-            pack_id = data.get('pack_id', None)
-            history = data.get('history', '')
+            try:
+                data = request.json
+                user_message = data.get('user_message')
+                pack_id = data.get('pack_id', None)
+                history = data.get('history', '')
+                logging.info("Extracted user_message: %s, pack_id: %s, history: %s", user_message, pack_id, history)
+            except Exception as e:
+                logging.error("Error extracting data from request: %s", str(e))
+                return {"error": "Error extracting data from request"}, 400
 
-            logging.info("Received POST request with user_message: %s, pack_id: %s", user_message, pack_id)
+            # Validate the user_message input
+            try:
+                if not isinstance(user_message, str) or not user_message:
+                    logging.error("Invalid user_message provided: %s", user_message)
+                    return {"error": "Invalid user_message provided"}, 400
+            except Exception as e:
+                logging.error("Error validating user_message: %s", str(e))
+                return {"error": "Error validating user_message"}, 400
 
             # Extract access token from the request headers
-            auth_header = request.headers.get('Authorization')
-            if not auth_header or not auth_header.startswith('Bearer '):
-                logging.error("Authorization token missing or invalid")
-                return {"error": "User not authenticated"}, 401
+            try:
+                auth_header = request.headers.get('Authorization')
+                if not auth_header or not auth_header.startswith('Bearer '):
+                    logging.error("Authorization token missing or invalid")
+                    return {"error": "User not authenticated"}, 401
 
-            # Extract the token by stripping the 'Bearer ' part
-            access_token = auth_header.split(' ')[1]
+                access_token = auth_header.split(' ')[1]
+                logging.info("Access token extracted successfully")
+            except Exception as e:
+                logging.error("Error extracting access token: %s", str(e))
+                return {"error": "Error extracting access token"}, 401
 
             # Fetch the user ID using the external API with the access token
-            auth_base_url = 'https://sourcebox-central-auth-8396932a641c.herokuapp.com'
-            get_user_id_url = f'{auth_base_url}/user/id'
-            headers = {'Authorization': f'Bearer {access_token}'}
+            try:
+                auth_base_url = 'https://sourcebox-central-auth-8396932a641c.herokuapp.com'
+                get_user_id_url = f'{auth_base_url}/user/id'
+                headers = {'Authorization': f'Bearer {access_token}'}
 
-            user_id_response = requests.get(get_user_id_url, headers=headers)
-            if user_id_response.status_code == 200:
-                user_id = user_id_response.json().get('user_id')
-                if not user_id:
-                    logging.error("User ID not found in the response")
-                    return {"message": "Failed to retrieve user ID"}, 500
-            else:
-                logging.error(f"Failed to retrieve user ID: {user_id_response.text}")
-                return {"error": f"Failed to retrieve user ID: {user_id_response.text}"}, user_id_response.status_code
+                user_id_response = requests.get(get_user_id_url, headers=headers)
+                if user_id_response.status_code == 200:
+                    user_id = user_id_response.json().get('user_id')
+                    if not user_id:
+                        logging.error("User ID not found in the response")
+                        return {"message": "Failed to retrieve user ID"}, 500
+                    logging.info("User ID retrieved: %s", user_id)
+                else:
+                    logging.error("Failed to retrieve user ID: %s", user_id_response.text)
+                    return {"error": f"Failed to retrieve user ID: {user_id_response.text}"}, user_id_response.status_code
+            except Exception as e:
+                logging.error("Error fetching user ID: %s", str(e))
+                return {"error": "Error fetching user ID"}, 500
 
             # Ensure user_id and pack_id are strings
-            user_id = str(user_id)
-            if pack_id:
-                pack_id = str(pack_id)
-
-            # Set the pack type to "pack"
-            pack_type = "pack"
+            try:
+                user_id = str(user_id)
+                if pack_id:
+                    if not isinstance(pack_id, str):
+                        logging.error("Invalid pack_id provided: %s", pack_id)
+                        return {"error": "Invalid pack_id provided"}, 400
+                    pack_id = str(pack_id)
+                logging.info("User ID and Pack ID are valid: user_id=%s, pack_id=%s", user_id, pack_id)
+            except Exception as e:
+                logging.error("Error processing user_id and pack_id: %s", str(e))
+                return {"error": "Error processing user_id and pack_id"}, 400
 
             # Process the pack if a pack_id is provided
             if pack_id:
-                logging.info("Processing regular pack with pack_id: %s", pack_id)
-                route = 'pack/details'
-                upload_and_process_pack(user_id, pack_id, route, pack_type, access_token)  # Pass user_id, pack_id, route, and pack_type
+                try:
+                    logging.info("Processing regular pack with pack_id: %s", pack_id)
+                    route = 'pack/details'
+                    upload_and_process_pack(user_id, pack_id, route, 'pack', access_token)
+                except Exception as e:
+                    logging.error("Error processing pack: %s", str(e))
+                    return {"error": "Error processing pack"}, 500
 
             # Get the user-specific folder for vector querying
-            user_folder = get_user_folder(user_id)
+            try:
+                user_folder = get_user_folder(user_id)
+                logging.info("User folder: %s", user_folder)
+            except Exception as e:
+                logging.error("Error getting user folder: %s", str(e))
+                return {"error": "Error getting user folder"}, 500
 
             # Set the correct dataset path for DeepLake based on user_id, pack_id, and pack_type
-            deeplake_folder_path = os.path.join("my_deeplake", user_id, pack_type, pack_id or "", "actual_deeplake_name")
+            if pack_id:
+                try:
+                    logging.info("Processing DeepLake for pack_id: %s", pack_id)
+                    deeplake_folder_path = os.path.join("my_deeplake", user_id, 'pack', pack_id, "actual_deeplake_name")
 
-            if os.path.exists(deeplake_folder_path) and os.path.isdir(deeplake_folder_path):
-                logging.info("The my_deeplake folder exists for user folder: %s", user_folder)
+                    if os.path.exists(deeplake_folder_path) and os.path.isdir(deeplake_folder_path):
+                        logging.info("DeepLake folder exists: %s", deeplake_folder_path)
+                    else:
+                        logging.info("DeepLake folder does not exist, running project_to_vector")
+                        project_to_vector(user_folder, user_id, pack_id, 'pack', access_token)
+                except Exception as e:
+                    logging.error("Error with DeepLake folder: %s", str(e))
+                    return {"error": "Error with DeepLake folder"}, 500
+
+                # Perform vector query
+                try:
+                    logging.info("Performing vector query")
+                    embedding_function = CustomEmbeddingFunction(client)
+                    db = DeepLake(dataset_path=deeplake_folder_path, embedding=embedding_function, read_only=True)
+                    vector_results = perform_query(db, user_message)
+                except Exception as e:
+                    logging.error("Error during vector query: %s", str(e))
+                    return {"error": "Error during vector query"}, 500
+
+                # Check if the vector query returned results
+                if not vector_results:
+                    logging.error("Vector query returned no results")
+                    return {"error": "No vector results found"}, 400
+
+                logging.info("Vector query results: %s", vector_results)
+
+                # Generate a response using GPT, integrating history and vector results
+                try:
+                    logging.info("Generating GPT response with vector results")
+                    assistant_message = chatgpt_response(access_token, user_message, history=history, vector_results=vector_results)
+                except Exception as e:
+                    logging.error("Error generating GPT response: %s", str(e))
+                    return {"error": "Error generating GPT response"}, 500
             else:
-                logging.info("The my_deeplake folder does not exist. Running project_to_vector.")
-                project_to_vector(user_folder, user_id, pack_id, pack_type, access_token)
-
-            # Perform vector query
-            logging.info("Performing vector query with user_message: %s", user_message)
-            embedding_function = CustomEmbeddingFunction(client)
-            db = DeepLake(dataset_path=deeplake_folder_path, embedding=embedding_function, read_only=True)
-            vector_results = perform_query(db, user_message)
-            logging.info("Vector query results: %s", vector_results)
-
-            # Generate a response using GPT, integrating history and vector results
-            logging.info("Generating response using GPT with history: %s and vector_results: %s", history, vector_results)
-            assistant_message = chatgpt_response(access_token, user_message, history=history, vector_results=vector_results)
+                try:
+                    logging.info("No pack id provided, performing non-vector GPT response")
+                    assistant_message = chatgpt_response(access_token, user_message, history=history)
+                except Exception as e:
+                    logging.error("Error generating non-vector GPT response: %s", str(e))
+                    return {"error": "Error generating non-vector GPT response"}, 500
 
             logging.info("Response generated successfully: %s", assistant_message)
 
@@ -403,8 +520,10 @@ class DeepQuery(Resource):
             logging.error("ValueError occurred: %s", str(ve))
             return {"error": str(ve)}, 400
         except Exception as e:
-            logging.error("Exception occurred: %s", str(e))
+            logging.error("Unhandled exception occurred: %s", str(e))
             return {"error": str(e)}, 500
+
+
 
 
 

@@ -21,6 +21,11 @@ load_dotenv()
 def perform_query(db_instance, query):
     logging.info(f"Initiating query with text: {query}")
     try:
+        # Validate query
+        if not isinstance(query, str) or not query.strip():
+            logging.error(f"Invalid query provided: {query}")
+            raise ValueError("Query must be a non-empty string.")
+
         logging.info("Checking if db_instance is initialized properly...")
         if db_instance is None:
             logging.error("The db_instance is None. Aborting query.")
@@ -46,7 +51,12 @@ def perform_query(db_instance, query):
                 logging.warning(f"Document {i + 1} is None. Skipping this document.")
                 continue
 
-            # Log metadata if it exists, otherwise default to page content
+            # Ensure the document has page_content and it is a string
+            if not hasattr(doc, 'page_content') or not isinstance(doc.page_content, str):
+                logging.warning(f"Document {i + 1} does not have valid page_content or it's not a string. Skipping.")
+                continue
+
+            # Log metadata if it exists, otherwise log that metadata is missing
             if hasattr(doc, 'metadata') and doc.metadata:
                 logging.info(f"Document {i + 1} metadata: {doc.metadata}")
             else:
@@ -60,9 +70,15 @@ def perform_query(db_instance, query):
         logging.info(f"Finished processing all {len(docs)} documents. Returning results.")
         return output
 
+    except ValueError as ve:
+        logging.error(f"ValueError occurred: {ve}")
+        return {}
     except Exception as e:
         logging.error(f"An error occurred during the similarity search: {e}", exc_info=True)
         return {}
+
+
+
 
 if __name__ == "__main__":
     # Initialize OpenAI client
