@@ -15,6 +15,7 @@ import hashlib
 import hashlib
 import re
 import logging
+import tiktoken
 
 
 # Configure logging (if not already configured elsewhere in your application)
@@ -177,8 +178,45 @@ def upload_and_process_pack(user_id, pack_id, route, pack_type, access_token):
     return {"message": f"{pack_type} uploaded and processed successfully", "folder": user_folder}
 
 
+def token_count(access_token, prompt, history=None, vector_results=None, response=None):
+    encoding = tiktoken.get_encoding("cl100k_base")  # Assuming GPT-4 encoding, adapt as necessary
+
+    # Encode prompt, history, vector_results, and response
+    prompt_tokens = len(encoding.encode(prompt)) if prompt else 0
+    history_tokens = len(encoding.encode(history)) if history else 0
+    vector_results_tokens = len(encoding.encode(vector_results)) if vector_results else 0
+    response_tokens = len(encoding.encode(response)) if response else 0
+
+    # Total token count
+    total_tokens = prompt_tokens + history_tokens + vector_results_tokens + response_tokens
+    logging.info(f"Token usage: Prompt={prompt_tokens}, History={history_tokens}, Vector Results={vector_results_tokens}, Response={response_tokens}, Total={total_tokens}")
+
+    # Send the total tokens to the API to record it in the database
+    BASE_URL = os.getenv('AUTH_API')
+    #send total_tokens to the API
+    if not BASE_URL:
+        logging.error("AUTH_API environment variable is not set")
+        return total_tokens
+
+    add_tokens_url = f"{BASE_URL}/user/add_tokens"
+    headers = {'Authorization': f'Bearer {access_token}', 'Content-Type': 'application/json'}
+    payload = {'tokens': total_tokens}
+
+    try:
+        response = requests.post(add_tokens_url, json=payload, headers=headers)
+        if response.status_code == 200:
+            logging.info(f"Successfully added {total_tokens} tokens to the user's account.")
+        else:
+            logging.error(f"Failed to add tokens. Status code: {response.status_code}, Response: {response.text}")
+    except requests.RequestException as e:
+        logging.error(f"Error occurred while trying to add tokens: {e}")
+    
+
+    return total_tokens
+
+
 # ChatGPT Response Function
-def chatgpt_response(prompt, history=None, vector_results=None):
+def chatgpt_response(access_token, prompt, history=None, vector_results=None):
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
@@ -186,7 +224,13 @@ def chatgpt_response(prompt, history=None, vector_results=None):
             {"role": "user", "content": f"USER PROMPT: {prompt}\nVECTOR SEARCH RESULTS: {vector_results}\nCONVERSATION HISTORY: {history}"}
         ]
     )
-    return response.choices[0].message.content
+    
+    response_content = response.choices[0].message.content
+
+    # Calculate and print token usage
+    token_count(access_token, prompt, history, vector_results, response_content)
+
+    return response_content
 
 
 # DeepQueryCode Resource
@@ -260,7 +304,7 @@ class DeepQueryCode(Resource):
 
             # Generate a response using GPT, integrating history and vector results
             logging.info("Generating response using GPT with history: %s and vector_results: %s", history, vector_results)
-            assistant_message = chatgpt_response(user_message, history=history, vector_results=vector_results)
+            assistant_message = chatgpt_response(access_token, user_message, history=history, vector_results=vector_results)
 
             logging.info("Response generated successfully: %s", assistant_message)
 
@@ -349,7 +393,7 @@ class DeepQuery(Resource):
 
             # Generate a response using GPT, integrating history and vector results
             logging.info("Generating response using GPT with history: %s and vector_results: %s", history, vector_results)
-            assistant_message = chatgpt_response(user_message, history=history, vector_results=vector_results)
+            assistant_message = chatgpt_response(access_token, user_message, history=history, vector_results=vector_results)
 
             logging.info("Response generated successfully: %s", assistant_message)
 
