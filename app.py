@@ -15,6 +15,8 @@ import hashlib
 import re
 import logging
 import tiktoken
+from langchain_community.document_loaders import WebBaseLoader   
+import pandas as pd
 
 
 # Configure logging (if not already configured elsewhere in your application)
@@ -888,6 +890,83 @@ class LandingSentimentExample(Resource):
 
 
 
+class LandingWebScrapeExample(Resource):
+    def post(self):
+        try:
+            # Extract the prompt from the request
+            data = request.get_json()
+            prompt = data.get('prompt')
+
+            # Link to the Amazon product reviews page
+            link = "https://www.amazon.com/product-reviews/B07SK575G9/ref=pd_bap_d_grid_rp_0_31_d_sccl_31_cr/141-2834517-6684030?pd_rd_i=B07SK575G9"
+
+            loader = WebBaseLoader(link)
+            docs = loader.load()
+
+            # Convert the docs to a string
+            docs_content = " ".join([doc.page_content for doc in docs])
+
+            # Regular expression pattern to match the reviews
+            pattern = r'(?P<reviewer>[\w\s]+)(?P<rating>\d\.\d) out of 5 stars(?P<review>[\w\s,]+)Reviewed in the United States on (?P<date>[\w\s\d,]+)'
+
+            # Apply regex to the content
+            matches = re.finditer(pattern, docs_content)
+
+            # Prepare the extracted data for a DataFrame
+            reviews = []
+
+            for match in matches:
+                reviewer = match.group('reviewer').strip()
+                rating = float(match.group('rating'))
+                review = match.group('review').strip()
+                date = match.group('date').strip()
+                
+                reviews.append({
+                    'Reviewer': reviewer,
+                    'Rating': rating,
+                    'Review': review,
+                    'Date': date
+                })
+
+            # Create a DataFrame
+            df = pd.DataFrame(reviews)
+
+            # Convert the full DataFrame to a string to pass to the GPT model
+            df_string = df.to_string(index=False)
+
+            webscrape_data = df_string
+
+            # Function to generate GPT response
+            def chatgpt_response(review_data, prompt):
+                try:
+                    # Call GPT API with formatted history and vector results
+                    response = client.chat.completions.create(
+                        model="gpt-4o-mini",
+                        messages=[
+                            {"role": "system", "content": """You are a helpfull assistant for analyzing for product reviews."""},   
+
+                            {"role": "user", "content": f"USER PROMPT: {prompt} Reviews: {review_data}"}
+                        ]
+                    )
+                    logging.info("GPT response generated successfully")
+                    return response.choices[0].message.content
+
+                except Exception as e:
+                    logging.error(f"Error generating GPT response: {e}")
+                    return f"Error: {e}"
+
+            # Generate GPT response
+            result = chatgpt_response(webscrape_data, prompt)
+
+            # Return the result
+            return {"result": result}, 200
+
+        except ValueError as ve:
+            logging.error(f"ValueError occurred: {ve}")
+            return {"error": str(ve)}, 400
+        except Exception as e:
+            logging.error(f"Unhandled exception occurred: {e}")
+            return {"error": str(e)}, 500
 
 
 # Flask-RESTful Resource Routing
@@ -899,6 +978,7 @@ api.add_resource(DeepQueryCodeRaw, '/deepquery-code-raw')
 api.add_resource(DeepQueryRaw, '/deepquery-raw')
 api.add_resource(LandingRagExample, '/landing-rag-example')
 api.add_resource(LandingSentimentExample, '/landing-sentiment-example')
+api.add_resource(LandingWebScrapeExample, '/landing-webscrape-example')
 
 # Run the Flask Application
 if __name__ == '__main__':
