@@ -87,7 +87,7 @@ def sanitize_filename(url):
     
     return filename
 
-
+# data processing
 def upload_and_process_pack(user_id, pack_id, route, pack_type, access_token):
     """
     This function uploads and processes a given pack for a user, identified by their user_id and pack_id.
@@ -181,6 +181,7 @@ def upload_and_process_pack(user_id, pack_id, route, pack_type, access_token):
     # Return a success message along with the path to the user folder
     return {"message": f"{pack_type} uploaded and processed successfully", "folder": user_folder}
 
+
 # token count
 def token_count(access_token, prompt, history=None, vector_results=None, response=None):
     encoding = tiktoken.get_encoding("cl100k_base")  # Assuming GPT-4 encoding, adapt as necessary
@@ -219,7 +220,6 @@ def token_count(access_token, prompt, history=None, vector_results=None, respons
     return total_tokens
 
 
-
 # ChatGPT Response Function
 def chatgpt_response(access_token, prompt, history=None, vector_results=None):
     try:
@@ -249,7 +249,6 @@ def chatgpt_response(access_token, prompt, history=None, vector_results=None):
     except Exception as e:
         logging.error(f"Error generating GPT response: {e}")
         return f"Error: {e}"
-
 
 
 # DeepQueryCode Resource
@@ -373,9 +372,6 @@ class DeepQueryCode(Resource):
         except Exception as e:
             logging.error("Exception occurred: %s", str(e))
             return {"error": str(e)}, 500
-
-
-
 
 
 class DeepQuery(Resource):
@@ -524,11 +520,6 @@ class DeepQuery(Resource):
             return {"error": str(e)}, 500
 
 
-
-
-
-
-
 #raw deepquery code resource
 class DeepQueryCodeRaw(Resource):
     def post(self):
@@ -611,9 +602,6 @@ class DeepQueryCodeRaw(Resource):
             logging.error("Exception occurred: %s", str(e))
             return {"error": str(e)}, 500
 
-
-
-
 #raw deepquery resource
 class DeepQueryRaw(Resource):
     def post(self):
@@ -695,8 +683,6 @@ class DeepQueryRaw(Resource):
         except Exception as e:
             logging.error("Exception occurred: %s", str(e))
             return {"error": str(e)}, 500
-
-
 
 
 # Login Resource
@@ -791,6 +777,56 @@ class DeleteSession(Resource):
 
 
 
+# landing page example usage resources
+class LandingRagExample(Resource):
+    def post(self):
+        try:
+            # Get current working directory and the CSV file path
+            cwd = os.getcwd()
+            file_path = os.path.join(cwd, 'landing-examples', 'customers.csv')
+
+            # Extract the prompt from the request
+            data = request.get_json()
+            prompt = data.get('prompt')
+
+            # Log the received prompt
+            logging.info("Received POST request with prompt: %s", prompt)
+
+            # Read the file content
+            with open(file_path, 'r') as file:
+                file_content = file.read()
+
+            # Function to generate GPT response
+            def chatgpt_response(prompt, file_content):
+                try:
+                    # Call GPT API with formatted history and vector results
+                    response = client.chat.completions.create(
+                        model="gpt-4o-mini",
+                        messages=[
+                            {"role": "system", "content": "You are a helpful code comprehension assistant. Analyze and respond based on the given context."},
+                            {"role": "user", "content": f"USER PROMPT: {prompt}\nFILE CONTENT: {file_content}"}
+                        ]
+                    )
+
+                    return response.choices[0].message.content
+
+                except Exception as e:
+                    logging.error(f"Error generating GPT response: {e}")
+                    return f"Error: {e}"
+            
+            result = chatgpt_response(prompt, file_content)
+
+            # Return the result
+            return {"result": result}, 200
+
+        except Exception as e:
+            # Handle any errors
+            logging.error(f"An error occurred: {str(e)}")
+            return {"error": str(e)}, 500
+
+
+
+
 # Flask-RESTful Resource Routing
 api.add_resource(DeepQueryCode, '/deepquery-code')
 api.add_resource(DeepQuery, '/deepquery')
@@ -798,7 +834,7 @@ api.add_resource(Login, '/login')
 api.add_resource(DeleteSession, '/delete-session')
 api.add_resource(DeepQueryCodeRaw, '/deepquery-code-raw')
 api.add_resource(DeepQueryRaw, '/deepquery-raw')
-
+api.add_resource(LandingRagExample, '/landing-rag-example')
 
 # Run the Flask Application
 if __name__ == '__main__':
