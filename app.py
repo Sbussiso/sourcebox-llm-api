@@ -6,7 +6,6 @@ import requests
 from flask import Flask, request, jsonify, session
 from flask_restful import Resource, Api
 from dotenv import load_dotenv
-from uuid import uuid4
 from vector import project_to_vector
 from query import perform_query
 from langchain_community.vectorstores import DeepLake
@@ -789,12 +788,19 @@ class LandingRagExample(Resource):
             data = request.get_json()
             prompt = data.get('prompt')
 
-            # Log the received prompt
-            logging.info("Received POST request with prompt: %s", prompt)
+            # Validate the prompt
+            if not isinstance(prompt, str) or not prompt.strip():
+                logging.error("Invalid or missing prompt")
+                return {"error": "Invalid or missing prompt"}, 400
 
             # Read the file content
-            with open(file_path, 'r') as file:
-                file_content = file.read()
+            try:
+                with open(file_path, 'r') as file:
+                    file_content = file.read()
+                logging.info("Successfully read the file content")
+            except Exception as e:
+                logging.error(f"Error reading file content: {e}")
+                return {"error": "Error reading file content"}, 500
 
             # Function to generate GPT response
             def chatgpt_response(prompt, file_content):
@@ -803,26 +809,30 @@ class LandingRagExample(Resource):
                     response = client.chat.completions.create(
                         model="gpt-4o-mini",
                         messages=[
-                            {"role": "system", "content": "You are a helpful code comprehension assistant. Analyze and respond based on the given context."},
+                            {"role": "system", "content": "You are a helpful assistant. Analyze and respond based on the given context."},
                             {"role": "user", "content": f"USER PROMPT: {prompt}\nFILE CONTENT: {file_content}"}
                         ]
                     )
-
+                    logging.info("GPT response generated successfully")
                     return response.choices[0].message.content
 
                 except Exception as e:
                     logging.error(f"Error generating GPT response: {e}")
                     return f"Error: {e}"
-            
+
+            # Generate GPT response
             result = chatgpt_response(prompt, file_content)
 
             # Return the result
             return {"result": result}, 200
 
+        except ValueError as ve:
+            logging.error(f"ValueError occurred: {ve}")
+            return {"error": str(ve)}, 400
         except Exception as e:
-            # Handle any errors
-            logging.error(f"An error occurred: {str(e)}")
+            logging.error(f"Unhandled exception occurred: {e}")
             return {"error": str(e)}, 500
+
 
 
 
