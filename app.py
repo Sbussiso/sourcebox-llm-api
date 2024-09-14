@@ -776,7 +776,9 @@ class DeleteSession(Resource):
 
 
 
-# landing page example usage resources
+# _____________landing page example usage resources_______________
+
+#rag example
 class LandingRagExample(Resource):
     def post(self):
         try:
@@ -835,6 +837,57 @@ class LandingRagExample(Resource):
 
 
 
+class LandingSentimentExample(Resource):
+    def post(self):
+        try:
+           
+            # Extract the prompt from the request
+            data = request.get_json()
+            prompt = data.get('prompt')
+
+            # Validate the prompt
+            if not isinstance(prompt, str) or not prompt.strip():
+                logging.error("Invalid or missing prompt")
+                return {"error": "Invalid or missing prompt"}, 400
+
+
+            # Function to generate GPT response
+            def chatgpt_response(prompt):
+                try:
+                    # Call GPT API with formatted history and vector results
+                    response = client.chat.completions.create(
+                        model="gpt-4o-mini",
+                        messages=[
+                            {"role": "system", "content": """You are a sentiment analyst.
+                                                            Analyze the sentiment of the given text and provide a sentiment score based on the context.
+                                                            Describe the overall sentiment as positive, negative, or neutral.
+                                                            Break down exactly what is being said and why it is positive, negative, or neutral."""},   
+
+                            {"role": "user", "content": f"USER PROMPT: {prompt}"}
+                        ]
+                    )
+                    logging.info("GPT response generated successfully")
+                    return response.choices[0].message.content
+
+                except Exception as e:
+                    logging.error(f"Error generating GPT response: {e}")
+                    return f"Error: {e}"
+
+            # Generate GPT response
+            result = chatgpt_response(prompt)
+
+            # Return the result
+            return {"result": result}, 200
+
+        except ValueError as ve:
+            logging.error(f"ValueError occurred: {ve}")
+            return {"error": str(ve)}, 400
+        except Exception as e:
+            logging.error(f"Unhandled exception occurred: {e}")
+            return {"error": str(e)}, 500
+
+
+
 
 
 # Flask-RESTful Resource Routing
@@ -845,6 +898,7 @@ api.add_resource(DeleteSession, '/delete-session')
 api.add_resource(DeepQueryCodeRaw, '/deepquery-code-raw')
 api.add_resource(DeepQueryRaw, '/deepquery-raw')
 api.add_resource(LandingRagExample, '/landing-rag-example')
+api.add_resource(LandingSentimentExample, '/landing-sentiment-example')
 
 # Run the Flask Application
 if __name__ == '__main__':
