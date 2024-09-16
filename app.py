@@ -897,44 +897,63 @@ class LandingWebScrapeExample(Resource):
             data = request.get_json()
             prompt = data.get('prompt')
 
-            # Link to the Amazon product reviews page
-            link = "https://www.amazon.com/product-reviews/B07SK575G9/ref=pd_bap_d_grid_rp_0_31_d_sccl_31_cr/141-2834517-6684030?pd_rd_i=B07SK575G9"
+            # Path to the webscraped file
+            save_path = os.path.join(os.getcwd(), 'landing-examples', 'webscraped_reviews.txt')
 
-            loader = WebBaseLoader(link)
-            docs = loader.load()
-
-            # Convert the docs to a string
-            docs_content = " ".join([doc.page_content for doc in docs])
-
-            # Regular expression pattern to match the reviews
-            pattern = r'(?P<reviewer>[\w\s]+)(?P<rating>\d\.\d) out of 5 stars(?P<review>[\w\s,]+)Reviewed in the United States on (?P<date>[\w\s\d,]+)'
-
-            # Apply regex to the content
-            matches = re.finditer(pattern, docs_content)
-
-            # Prepare the extracted data for a DataFrame
-            reviews = []
-
-            for match in matches:
-                reviewer = match.group('reviewer').strip()
-                rating = float(match.group('rating'))
-                review = match.group('review').strip()
-                date = match.group('date').strip()
+            # Check if the webscraped file exists
+            if os.path.exists(save_path):
+                logging.info(f"File found at {save_path}. Skipping scraping and loading the file contents.")
                 
-                reviews.append({
-                    'Reviewer': reviewer,
-                    'Rating': rating,
-                    'Review': review,
-                    'Date': date
-                })
+                # Read the content of the file
+                with open(save_path, 'r') as f:
+                    webscrape_data = f.read()
+            else:
+                # File doesn't exist, scrape the content
+                logging.info(f"File not found at {save_path}. Scraping the content from the web.")
+                
+                # Link to the Amazon product reviews page
+                link = "https://www.amazon.com/product-reviews/B07SK575G9/ref=pd_bap_d_grid_rp_0_31_d_sccl_31_cr/141-2834517-6684030?pd_rd_i=B07SK575G9"
+                
+                # Load the data from the link
+                loader = WebBaseLoader(link)
+                docs = loader.load()
 
-            # Create a DataFrame
-            df = pd.DataFrame(reviews)
+                # Convert the docs to a string
+                docs_content = " ".join([doc.page_content for doc in docs])
 
-            # Convert the full DataFrame to a string to pass to the GPT model
-            df_string = df.to_string(index=False)
+                # Regular expression pattern to match the reviews
+                pattern = r'(?P<reviewer>[\w\s]+)(?P<rating>\d\.\d) out of 5 stars(?P<review>[\w\s,]+)Reviewed in the United States on (?P<date>[\w\s\d,]+)'
 
-            webscrape_data = df_string
+                # Apply regex to the content
+                matches = re.finditer(pattern, docs_content)
+
+                # Prepare the extracted data for a DataFrame
+                reviews = []
+
+                for match in matches:
+                    reviewer = match.group('reviewer').strip()
+                    rating = float(match.group('rating'))
+                    review = match.group('review').strip()
+                    date = match.group('date').strip()
+
+                    reviews.append({
+                        'Reviewer': reviewer,
+                        'Rating': rating,
+                        'Review': review,
+                        'Date': date
+                    })
+
+                # Create a DataFrame
+                df = pd.DataFrame(reviews)
+
+                # Convert the full DataFrame to a string to pass to the GPT model
+                webscrape_data = df.to_string(index=False)
+
+                # Save the DataFrame content as a text file
+                with open(save_path, 'w') as f:
+                    f.write(webscrape_data)
+
+                logging.info(f"Webscraped reviews saved at: {save_path}")
 
             # Function to generate GPT response
             def chatgpt_response(review_data, prompt):
@@ -943,8 +962,7 @@ class LandingWebScrapeExample(Resource):
                     response = client.chat.completions.create(
                         model="gpt-4o-mini",
                         messages=[
-                            {"role": "system", "content": """You are a helpfull assistant for analyzing for product reviews."""},   
-
+                            {"role": "system", "content": """You are a helpful assistant for analyzing product reviews."""},
                             {"role": "user", "content": f"USER PROMPT: {prompt} Reviews: {review_data}"}
                         ]
                     )
@@ -955,7 +973,7 @@ class LandingWebScrapeExample(Resource):
                     logging.error(f"Error generating GPT response: {e}")
                     return f"Error: {e}"
 
-            # Generate GPT response
+            # Generate GPT response using the file content (whether scraped or loaded)
             result = chatgpt_response(webscrape_data, prompt)
 
             # Return the result
@@ -967,6 +985,8 @@ class LandingWebScrapeExample(Resource):
         except Exception as e:
             logging.error(f"Unhandled exception occurred: {e}")
             return {"error": str(e)}, 500
+
+
 
 
 # Flask-RESTful Resource Routing
