@@ -43,6 +43,7 @@ langchain-core==0.2.39
 langchain-text-splitters==0.2.4
 langsmith==0.1.117
 logging==0.4.9.6
+lxml==5.3.0
 lz4==4.3.3
 MarkupSafe==2.1.5
 marshmallow==3.22.0
@@ -63,6 +64,7 @@ pydantic==2.9.1
 pydantic_core==2.23.3
 PyJWT==2.9.0
 python-dateutil==2.9.0.post0
+python-docx==1.1.2
 python-dotenv==1.0.1
 pytz==2024.1
 PyYAML==6.0.2
