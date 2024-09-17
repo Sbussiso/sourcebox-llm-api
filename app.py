@@ -264,6 +264,7 @@ def max_token_flag(access_token):
 
 
 
+
 # ChatGPT Response Function
 def chatgpt_response(access_token, prompt, history=None, vector_results=None):
     try:
@@ -575,7 +576,7 @@ class DeepQuery(Resource):
             return {"error": str(e)}, 500
 
 
-#raw deepquery code resource
+
 class DeepQueryCodeRaw(Resource):
     def post(self):
         try:
@@ -594,6 +595,11 @@ class DeepQueryCodeRaw(Resource):
 
             # Extract the token by stripping the 'Bearer ' part
             access_token = auth_header.split(' ')[1]
+
+            # Check if token limit is exceeded
+            max_flag = max_token_flag(access_token)
+            if max_flag:
+                return {"message": "Token limit exceeded, buy premium or request more tokens"}, 200
 
             # Fetch the user ID using the external API with the access token
             auth_base_url = 'https://sourcebox-central-auth-8396932a641c.herokuapp.com'
@@ -657,7 +663,8 @@ class DeepQueryCodeRaw(Resource):
             logging.error("Exception occurred: %s", str(e))
             return {"error": str(e)}, 500
 
-#raw deepquery resource
+
+
 class DeepQueryRaw(Resource):
     def post(self):
         try:
@@ -676,6 +683,11 @@ class DeepQueryRaw(Resource):
 
             # Extract the token by stripping the 'Bearer ' part
             access_token = auth_header.split(' ')[1]
+
+            # Check if token limit is exceeded
+            max_flag = max_token_flag(access_token)
+            if max_flag:
+                return {"message": "Token limit exceeded, buy premium or request more tokens"}, 200
 
             # Fetch the user ID using the external API with the access token
             auth_base_url = 'https://sourcebox-central-auth-8396932a641c.herokuapp.com'
@@ -738,6 +750,7 @@ class DeepQueryRaw(Resource):
         except Exception as e:
             logging.error("Exception occurred: %s", str(e))
             return {"error": str(e)}, 500
+
 
 
 # Login Resource
