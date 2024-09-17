@@ -1,32 +1,25 @@
 import requests
-import json
+import os
 
-# Define the URL for the local API endpoint for image generation
-url = 'http://localhost:8000/landing-imagegen-example'
+# Define the URL for the local API endpoint you want to test
+url = 'http://localhost:8000/landing-transcript-example'
 
-# Define the payload with the prompt to generate an image
-payload = {
-    "prompt": "A futuristic city skyline at sunset with flying cars"
-}
+# Function to simulate a GET request to the transcription resource
+def test_transcription():
+    try:
+        # Send the GET request to the API
+        response = requests.get(url)
 
-# Set the headers to send JSON content
-headers = {
-    'Content-Type': 'application/json'
-}
+        # Check the response status code
+        if response.status_code == 200:
+            # Print the transcription result
+            print("Transcription Result:", response.json())
+        else:
+            # Print error details
+            print(f"Error: {response.status_code}, {response.json()}")
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
-# Make the POST request to the API with the image generation prompt
-response = requests.post(url, headers=headers, data=json.dumps(payload))
-
-# Print the status code and the response content from the API
-print("Status Code:", response.status_code)
-print("Response Content:", response.json())
-
-# Test with another prompt
-print("\nTesting with another prompt...")
-payload = {
-    "prompt": "A fantasy dragon flying over a mountain range"
-}
-
-response = requests.post(url, headers=headers, data=json.dumps(payload))
-print("Status Code:", response.status_code)
-print("Response Content:", response.json())
+# Run the test
+if __name__ == "__main__":
+    test_transcription()

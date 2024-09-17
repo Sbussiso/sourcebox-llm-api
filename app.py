@@ -17,6 +17,7 @@ import logging
 import tiktoken
 from langchain_community.document_loaders import WebBaseLoader   
 import pandas as pd
+from docx import Document
 
 
 # Configure logging (if not already configured elsewhere in your application)
@@ -1025,6 +1026,38 @@ class LandingImageGenExample(Resource):
             return {"error": str(e)}, 500
 
 
+class LandingTranscriptExample(Resource):
+    def get(self):  # Change this to GET
+        try:
+            # Set the path to your audio file
+            audio_file_path = os.path.join(os.getcwd(), 'landing-examples', 'audio.wav')
+
+            # Function to transcribe the audio
+            def transcribe_audio(audio_file_path):
+                # Open the audio file in binary read mode
+                with open(audio_file_path, 'rb') as audio_file:
+                    # Call the transcription service (assuming client is properly initialized)
+                    transcription = client.audio.transcriptions.create(
+                        file=audio_file,
+                        model="whisper-1"
+                    )
+                # Return the transcription text from the object (assuming it has an attribute 'text')
+                return transcription.text if hasattr(transcription, 'text') else transcription  # Fallback if 'text' doesn't exist
+            
+            # Call the transcribe_audio function with the correct file path
+            result = transcribe_audio(audio_file_path)
+            
+            # Return the result
+            return {"result": result}, 200
+
+        except ValueError as ve:
+            logging.error(f"ValueError occurred: {ve}")
+            return {"error": str(ve)}, 400
+        except Exception as e:
+            logging.error(f"Unhandled exception occurred: {e}")
+            return {"error": str(e)}, 500
+
+
 
 # Flask-RESTful Resource Routing
 api.add_resource(DeepQueryCode, '/deepquery-code')
@@ -1037,6 +1070,7 @@ api.add_resource(LandingRagExample, '/landing-rag-example')
 api.add_resource(LandingSentimentExample, '/landing-sentiment-example')
 api.add_resource(LandingWebScrapeExample, '/landing-webscrape-example')
 api.add_resource(LandingImageGenExample, '/landing-imagegen-example')
+api.add_resource(LandingTranscriptExample, '/landing-transcript-example')
 
 # Run the Flask Application
 if __name__ == '__main__':
