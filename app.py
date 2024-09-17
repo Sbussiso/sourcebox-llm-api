@@ -988,6 +988,43 @@ class LandingWebScrapeExample(Resource):
 
 
 
+class LandingImageGenExample(Resource):
+    def post(self):
+        try:
+            # Extract the prompt from the request
+            data = request.get_json()
+            prompt = data.get('prompt')
+
+            try:
+                def image_generator(prompt):
+                    response = client.images.generate(
+                        model="dall-e-3",
+                        prompt=prompt,
+                        size="1024x1024",
+                        quality="standard",
+                        n=1,
+                        )
+                    
+                    image_url = response.data[0].url
+                    return image_url
+                    
+            
+                result = image_generator(prompt)
+                # Return the result
+                return {"result": result}, 200
+            
+            except Exception as e:
+                logging.error(f"Error generating image: {e}")
+                return {"error": "Error generating image"}, 500
+
+        except ValueError as ve:
+            logging.error(f"ValueError occurred: {ve}")
+            return {"error": str(ve)}, 400
+        except Exception as e:
+            logging.error(f"Unhandled exception occurred: {e}")
+            return {"error": str(e)}, 500
+
+
 
 # Flask-RESTful Resource Routing
 api.add_resource(DeepQueryCode, '/deepquery-code')
@@ -999,6 +1036,7 @@ api.add_resource(DeepQueryRaw, '/deepquery-raw')
 api.add_resource(LandingRagExample, '/landing-rag-example')
 api.add_resource(LandingSentimentExample, '/landing-sentiment-example')
 api.add_resource(LandingWebScrapeExample, '/landing-webscrape-example')
+api.add_resource(LandingImageGenExample, '/landing-imagegen-example')
 
 # Run the Flask Application
 if __name__ == '__main__':
