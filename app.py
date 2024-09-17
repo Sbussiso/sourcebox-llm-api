@@ -222,6 +222,48 @@ def token_count(access_token, prompt, history=None, vector_results=None, respons
     return total_tokens
 
 
+def max_token_flag(access_token):
+    AUTH_API = os.getenv('AUTH_API')
+
+    def get_token_count(access_token):
+        """Fetches the current token count for the user."""
+        token_count_url = f'{AUTH_API}/user/token_usage'
+        headers = {'Authorization': f'Bearer {access_token}'}
+
+        try:
+            response = requests.get(token_count_url, headers=headers)
+            if response.status_code == 200:
+                token_data = response.json()
+                token_count = token_data.get('total_tokens', 0)
+                print(f"Current token count: {token_count}")
+                return token_count
+            else:
+                print(f"Failed to get token count. Status code: {response.status_code}, Response: {response.text}")
+                return None
+        except requests.RequestException as e:
+            print(f"Error fetching token count: {e}")
+            return None
+
+
+    # max token flag
+    """Check if the token count exceeds the maximum limit."""
+    token_count = get_token_count(access_token)
+
+    if token_count is None:
+        print("Failed to retrieve token count.")
+        return False
+
+    # If token count is greater than the free limit (1,000,000)
+    if token_count > 1000000:
+        print("Token limit exceeded.")
+        return True
+    else:
+        print("Token limit not exceeded.")
+        return False
+
+
+
+
 # ChatGPT Response Function
 def chatgpt_response(access_token, prompt, history=None, vector_results=None):
     try:
@@ -279,94 +321,100 @@ class DeepQueryCode(Resource):
             # Extract the token by stripping the 'Bearer ' part
             access_token = auth_header.split(' ')[1]
 
-            try:
-                # Fetch the user ID using the external API with the access token
-                auth_base_url = 'https://sourcebox-central-auth-8396932a641c.herokuapp.com'
-                get_user_id_url = f'{auth_base_url}/user/id'
-                headers = {'Authorization': f'Bearer {access_token}'}
-                user_id_response = requests.get(get_user_id_url, headers=headers)
-                user_id_response.raise_for_status()  # Raise an exception for bad HTTP responses
+            # check if token limit is exceeded
+            max_flag = max_token_flag(access_token)
+            if max_flag == False:
+                try:
+                    # Fetch the user ID using the external API with the access token
+                    auth_base_url = 'https://sourcebox-central-auth-8396932a641c.herokuapp.com'
+                    get_user_id_url = f'{auth_base_url}/user/id'
+                    headers = {'Authorization': f'Bearer {access_token}'}
+                    user_id_response = requests.get(get_user_id_url, headers=headers)
+                    user_id_response.raise_for_status()  # Raise an exception for bad HTTP responses
 
-                user_id = user_id_response.json().get('user_id')
-                if not user_id:
-                    logging.error("User ID not found in the response")
-                    return {"error": "Failed to retrieve user ID"}, 500
-            except requests.exceptions.RequestException as e:
-                logging.error(f"Failed to retrieve user ID: {str(e)}")
-                return {"error": f"Failed to retrieve user ID: {str(e)}"}, 500
+                    user_id = user_id_response.json().get('user_id')
+                    if not user_id:
+                        logging.error("User ID not found in the response")
+                        return {"error": "Failed to retrieve user ID"}, 500
+                except requests.exceptions.RequestException as e:
+                    logging.error(f"Failed to retrieve user ID: {str(e)}")
+                    return {"error": f"Failed to retrieve user ID: {str(e)}"}, 500
 
-            # Ensure user_id and pack_id are strings to prevent errors during file path generation
-            try:
-                user_id = str(user_id)
+                # Ensure user_id and pack_id are strings to prevent errors during file path generation
+                try:
+                    user_id = str(user_id)
+                    if pack_id:
+                        pack_id = str(pack_id)
+                except Exception as e:
+                    logging.error(f"Error converting user_id/pack_id to string: {str(e)}")
+                    return {"error": "Error processing user_id or pack_id"}, 500
+
+                # Set the pack type to "code_pack"
+                pack_type = "code_pack"
+
+                # Process the pack if a pack_id is provided
                 if pack_id:
-                    pack_id = str(pack_id)
-            except Exception as e:
-                logging.error(f"Error converting user_id/pack_id to string: {str(e)}")
-                return {"error": "Error processing user_id or pack_id"}, 500
+                    try:
+                        logging.info("Processing code pack with pack_id: %s", pack_id)
+                        route = 'code/details'
+                        upload_and_process_pack(user_id, pack_id, route, pack_type, access_token)
+                    except Exception as e:
+                        logging.error(f"Error processing pack: {str(e)}")
+                        return {"error": "Error processing pack"}, 500
 
-            # Set the pack type to "code_pack"
-            pack_type = "code_pack"
+                    # Get the user-specific folder for vector querying
+                    try:
+                        user_folder = get_user_folder(user_id)
+                    except Exception as e:
+                        logging.error(f"Error retrieving user folder: {str(e)}")
+                        return {"error": "Error retrieving user folder"}, 500
 
-            # Process the pack if a pack_id is provided
-            if pack_id:
-                try:
-                    logging.info("Processing code pack with pack_id: %s", pack_id)
-                    route = 'code/details'
-                    upload_and_process_pack(user_id, pack_id, route, pack_type, access_token)
-                except Exception as e:
-                    logging.error(f"Error processing pack: {str(e)}")
-                    return {"error": "Error processing pack"}, 500
+                    # Set the correct dataset path for DeepLake based on user_id, pack_id, and pack_type
+                    try:
+                        deeplake_folder_path = os.path.join("my_deeplake", user_id, pack_type, pack_id or "", "actual_deeplake_name")
 
-                # Get the user-specific folder for vector querying
-                try:
-                    user_folder = get_user_folder(user_id)
-                except Exception as e:
-                    logging.error(f"Error retrieving user folder: {str(e)}")
-                    return {"error": "Error retrieving user folder"}, 500
+                        if os.path.exists(deeplake_folder_path) and os.path.isdir(deeplake_folder_path):
+                            logging.info("The my_deeplake folder exists for user folder: %s", user_folder)
+                        else:
+                            logging.info("The my_deeplake folder does not exist. Running project_to_vector.")
+                            project_to_vector(user_folder, user_id, pack_id, pack_type, access_token)
+                    except Exception as e:
+                        logging.error(f"Error setting or accessing dataset path: {str(e)}")
+                        return {"error": "Error processing dataset path"}, 500
 
-                # Set the correct dataset path for DeepLake based on user_id, pack_id, and pack_type
-                try:
-                    deeplake_folder_path = os.path.join("my_deeplake", user_id, pack_type, pack_id or "", "actual_deeplake_name")
+                    # Perform vector query
+                    try:
+                        logging.info("Performing vector query with user_message: %s", user_message)
+                        embedding_function = CustomEmbeddingFunction(client)
+                        db = DeepLake(dataset_path=deeplake_folder_path, embedding=embedding_function, read_only=True)
+                        vector_results = perform_query(db, user_message)
+                        logging.info("Vector query results: %s", vector_results)
+                    except Exception as e:
+                        logging.error(f"Error performing vector query: {str(e)}")
+                        return {"error": "Error during vector query"}, 500
 
-                    if os.path.exists(deeplake_folder_path) and os.path.isdir(deeplake_folder_path):
-                        logging.info("The my_deeplake folder exists for user folder: %s", user_folder)
-                    else:
-                        logging.info("The my_deeplake folder does not exist. Running project_to_vector.")
-                        project_to_vector(user_folder, user_id, pack_id, pack_type, access_token)
-                except Exception as e:
-                    logging.error(f"Error setting or accessing dataset path: {str(e)}")
-                    return {"error": "Error processing dataset path"}, 500
+                    # Generate a response using GPT, integrating history and vector results
+                    try:
+                        logging.info("Generating response using GPT with history: %s and vector_results: %s", history, vector_results)
+                        assistant_message = chatgpt_response(access_token, user_message, history=history, vector_results=vector_results)
+                    except Exception as e:
+                        logging.error(f"Error generating GPT response: {str(e)}")
+                        return {"error": "Error generating GPT response"}, 500
+                else:
+                    try:
+                        # No pack_id provided, perform non-vector GPT response
+                        logging.info("No pack id provided. Performing non-vector GPT response.")
+                        assistant_message = chatgpt_response(access_token, user_message, history=history)
+                    except Exception as e:
+                        logging.error(f"Error generating non-vector GPT response: {str(e)}")
+                        return {"error": "Error generating non-vector GPT response"}, 500
 
-                # Perform vector query
-                try:
-                    logging.info("Performing vector query with user_message: %s", user_message)
-                    embedding_function = CustomEmbeddingFunction(client)
-                    db = DeepLake(dataset_path=deeplake_folder_path, embedding=embedding_function, read_only=True)
-                    vector_results = perform_query(db, user_message)
-                    logging.info("Vector query results: %s", vector_results)
-                except Exception as e:
-                    logging.error(f"Error performing vector query: {str(e)}")
-                    return {"error": "Error during vector query"}, 500
+                logging.info("Response generated successfully: %s", assistant_message)
 
-                # Generate a response using GPT, integrating history and vector results
-                try:
-                    logging.info("Generating response using GPT with history: %s and vector_results: %s", history, vector_results)
-                    assistant_message = chatgpt_response(access_token, user_message, history=history, vector_results=vector_results)
-                except Exception as e:
-                    logging.error(f"Error generating GPT response: {str(e)}")
-                    return {"error": "Error generating GPT response"}, 500
+                return {"message": assistant_message}, 200
+            #token limit exceeded
             else:
-                try:
-                    # No pack_id provided, perform non-vector GPT response
-                    logging.info("No pack id provided. Performing non-vector GPT response.")
-                    assistant_message = chatgpt_response(access_token, user_message, history=history)
-                except Exception as e:
-                    logging.error(f"Error generating non-vector GPT response: {str(e)}")
-                    return {"error": "Error generating non-vector GPT response"}, 500
-
-            logging.info("Response generated successfully: %s", assistant_message)
-
-            return {"message": assistant_message}, 200
+                return {"message": "Token limit exceeded, buy premium or request more tokens"}, 200
 
         except ValueError as ve:
             logging.error("ValueError occurred: %s", str(ve))
@@ -411,6 +459,11 @@ class DeepQuery(Resource):
             except Exception as e:
                 logging.error("Error extracting access token: %s", str(e))
                 return {"error": "Error extracting access token"}, 401
+
+            # Check if token limit is exceeded
+            max_flag = max_token_flag(access_token)
+            if max_flag:
+                return {"message": "Token limit exceeded, buy premium or request more tokens"}, 200
 
             # Fetch the user ID using the external API with the access token
             try:

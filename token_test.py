@@ -35,11 +35,32 @@ def get_token_count(access_token):
         response = requests.get(token_count_url, headers=headers)
         if response.status_code == 200:
             token_data = response.json()
-            print(f"Current token count: {token_data.get('total_tokens')}")
+            token_count = token_data.get('total_tokens', 0)
+            print(f"Current token count: {token_count}")
+            return token_count
         else:
             print(f"Failed to get token count. Status code: {response.status_code}, Response: {response.text}")
+            return None
     except requests.RequestException as e:
         print(f"Error fetching token count: {e}")
+        return None
+
+
+def max_token_flag(access_token):
+    """Check if the token count exceeds the maximum limit."""
+    token_count = get_token_count(access_token)
+
+    if token_count is None:
+        print("Failed to retrieve token count.")
+        return False
+
+    # If token count is greater than the free limit (1,000,000)
+    if token_count > 43939:
+        print("Token limit exceeded.")
+        return True
+    else:
+        print("Token limit not exceeded.")
+        return False
 
 if __name__ == '__main__':
     # Replace with your test email and password
@@ -52,3 +73,8 @@ if __name__ == '__main__':
     # Step 2: If login was successful, fetch the current token count
     if access_token:
         get_token_count(access_token)
+
+        print("\nChecking token limit status:\n")
+
+        # Step 3: Check if the user has reached the token limit
+        max_token_flag(access_token)
