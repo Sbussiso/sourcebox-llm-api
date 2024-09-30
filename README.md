@@ -172,5 +172,24 @@ Payload Example:
 > ***requirements.txt:*** Lists all necessary Python packages and libraries.
 
 <br/>
+<br/>
+<br/>
+<br/>
 
+## Configuration
 
+> The ***config*** folder contains configuration files for environment-specific settings, such as database URLs, API keys, and authentication services. Modify these files as needed to fit your deployment environment.
+
+<br>
+
+## Logging and Debugging
+
+> Logging is configured in each module to capture debug information, errors, and warnings. Log files are stored in the root directory as app.log. To adjust logging levels, modify the logging.basicConfig configuration in each file.
+
+<br/>
+
+### Licence
+
+> The SourceBox LLM API is licensed under the MIT License. See the LICENSE file for more information.
+
+<br/>
