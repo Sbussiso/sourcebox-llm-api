@@ -29,3 +29,15 @@
 ### Token Usage Tracking
 
 > Monitor and limit token usage to manage costs and prevent overuse.
+
+<br/>
+<br/>
+<br/>
+<br/>
+
+# Installation
+
+```
+git clone <repository_url>
+cd sourcebox-llm-api
+```
