@@ -60,4 +60,13 @@ pip install -r requirements.txt
 
 <br/>
 
+### Running Application
+```
+flask run
+```
+or
+```
+flask run --port=8000
+```
+
 
