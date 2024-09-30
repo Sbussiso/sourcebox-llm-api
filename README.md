@@ -127,6 +127,20 @@ Payload Example:
   "history": ""
 }
 ```
+<br/>
+
+### Delete Session
+
+- Endpoint: /delete-session
+- Description: Deletes user sessions and associated files.
+- Method: DELETE
+
+Payload Example:
+```
+{
+  "user_id": "user123"
+}
+```
 
 <br/>
 
