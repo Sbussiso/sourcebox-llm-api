@@ -143,4 +143,16 @@ Payload Example:
 ```
 
 <br/>
+<br/>
+<br/>
+<br/>
+
+## Project Structure
+
+- ***app.py:*** Main application logic for routing and processing API requests.
+- ***custom_embedding.py:*** Defines custom embedding functions for document processing.
+- ***query.py:*** Implements the query logic for interacting with the vector search database.
+- ***vector.py:*** Handles vectorization and document processing for the DeepQuery module.
+- ***prepare_data.py:*** Pre-processes and cleans data for embedding.
+- ***requirements.txt:*** Lists all necessary Python packages and libraries.
 
