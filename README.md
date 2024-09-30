@@ -37,7 +37,27 @@
 
 # Installation
 
+### Clone the Repository
 ```
-git clone <repository_url>
+git clone https://github.com/Sbussiso/sourcebox-llm-api.git
 cd sourcebox-llm-api
 ```
+
+<br/>
+
+### Set Up a Virtual Environment
+```
+python3 -m venv venv
+source venv/bin/activate   # On Windows, use `venv\Scripts\activate`
+```
+
+<br/>
+
+### Install Dependencies
+```
+pip install -r requirements.txt
+```
+
+<br/>
+
+
