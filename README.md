@@ -64,7 +64,7 @@ pip install -r requirements.txt
 ```
 flask run
 ```
-or
+### or
 ```
 flask run --port=8000
 ```
