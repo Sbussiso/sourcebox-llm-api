@@ -69,4 +69,64 @@ flask run
 flask run --port=8000
 ```
 
+<br/>
+<br/>
+<br/>
+<br/>
+
+## API Endpoints
+
+The SourceBox LLM API exposes several RESTful endpoints for interacting with your data and executing code analysis.
+
+<br/>
+
+### Login
+
+- Endpoint: /login
+- Description: Authenticates the user and retrieves an access token.
+- Method: POST
+
+Payload Example:
+```
+{
+  "email": "user@example.com",
+  "password": "password123"
+}
+```
+
+<br/>
+
+### DeepQuery
+
+- Endpoint: /deepquery
+- Description: Used for querying general data packs with an AI chatbot.
+- Method: POST
+
+Payload Example:
+```
+{
+  "user_message": "Summarize the key findings",
+  "pack_id": "1",
+  "history": ""
+}
+```
+
+<br/>
+
+### DeepQuery Code
+
+- Endpoint: /deepquery-code
+- Description: Used for querying code packs, providing context-based responses for code repositories.
+- Method: POST
+  
+Payload Example:
+```
+{
+  "user_message": "Explain the purpose of this function.",
+  "pack_id": "6",
+  "history": ""
+}
+```
+
+<br/>
 
